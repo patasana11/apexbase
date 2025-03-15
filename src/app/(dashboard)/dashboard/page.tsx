@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from 'react';
 import Link from "next/link";
 import {
   FiBarChart,
@@ -12,6 +15,7 @@ import {
   FiMoreHorizontal,
   FiCode,
   FiPlus,
+  FiLayers,
 } from "react-icons/fi";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,8 +29,30 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { WorkflowMonitorService } from "@/lib/services/workflow-monitor.service";
+
+// Initialize the workflow monitor service
+const workflowMonitor = new WorkflowMonitorService();
 
 export default function DashboardPage() {
+  const [workflowStatus, setWorkflowStatus] = useState<'Operational' | 'Degraded' | 'Down'>('Operational');
+
+  useEffect(() => {
+    // Update workflow status initially and every minute
+    const updateStatus = async () => {
+      const status = await workflowMonitor.getOverallWorkflowStatus();
+      setWorkflowStatus(status);
+    };
+
+    updateStatus();
+    const interval = setInterval(updateStatus, 60000);
+
+    return () => {
+      clearInterval(interval);
+      workflowMonitor.destroy();
+    };
+  }, []);
+
   const stats = [
     {
       title: "Active Users",
@@ -269,6 +295,7 @@ export default function DashboardPage() {
                 { name: "Database", status: "Operational", icon: <FiDatabase className="h-4 w-4" /> },
                 { name: "Storage", status: "Operational", icon: <FiHardDrive className="h-4 w-4" /> },
                 { name: "Functions", status: "Degraded", icon: <FiCode className="h-4 w-4" /> },
+                { name: "Workflow", status: workflowStatus, icon: <FiLayers className="h-4 w-4" /> },
                 { name: "Realtime", status: "Operational", icon: <FiZap className="h-4 w-4" /> },
               ].map((service, i) => (
                 <div
@@ -290,7 +317,9 @@ export default function DashboardPage() {
                     className={
                       service.status === "Operational"
                         ? "bg-green-100 text-green-800 hover:bg-green-100 dark:bg-green-900 dark:text-green-400 dark:hover:bg-green-900"
-                        : "bg-yellow-100 text-yellow-800 hover:bg-yellow-100 dark:bg-yellow-900 dark:text-yellow-400 dark:hover:bg-yellow-900"
+                        : service.status === "Degraded"
+                        ? "bg-yellow-100 text-yellow-800 hover:bg-yellow-100 dark:bg-yellow-900 dark:text-yellow-400 dark:hover:bg-yellow-900"
+                        : "bg-red-100 text-red-800 hover:bg-red-100 dark:bg-red-900 dark:text-red-400 dark:hover:bg-red-900"
                     }
                   >
                     {service.status}

@@ -14,7 +14,7 @@ export function HeroSection() {
         <div className="flex flex-col items-center text-center">
           <Badge variant="outline" className="mb-6 px-3.5 py-1.5 text-sm">
             <span className="mr-1 inline-block h-2 w-2 animate-pulse rounded-full bg-blue-600"></span>
-            Introducing BackendPro - Now in Public Beta
+            Introducing ApexBase - Now in Public Beta
           </Badge>
 
           <h1 className="mb-6 text-4xl font-extrabold tracking-tight sm:text-5xl md:text-6xl lg:text-7xl">

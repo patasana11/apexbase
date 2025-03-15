@@ -65,7 +65,7 @@ export function Navbar() {
               <div className="absolute inset-1 rounded-full bg-background"></div>
               <div className="absolute inset-2 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600"></div>
             </div>
-            <span className="hidden font-bold sm:inline-block">BackendPro</span>
+            <span className="hidden font-bold sm:inline-block">ApexBase</span>
           </Link>
           <nav className="hidden gap-6 md:flex">
             <NavigationMenu>
@@ -148,7 +148,7 @@ export function Navbar() {
                     <div className="absolute inset-1 rounded-full bg-background"></div>
                     <div className="absolute inset-2 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600"></div>
                   </div>
-                  <span className="font-bold">BackendPro</span>
+                  <span className="font-bold">ApexBase</span>
                 </Link>
                 <div className="flex flex-col space-y-4">
                   <div className="flex flex-col space-y-3">

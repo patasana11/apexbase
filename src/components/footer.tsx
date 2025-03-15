@@ -12,7 +12,7 @@ export function Footer() {
                 <div className="absolute inset-1 rounded-full bg-background"></div>
                 <div className="absolute inset-2 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600"></div>
               </div>
-              <span className="font-bold">BackendPro</span>
+              <span className="font-bold">ApexBase</span>
             </div>
             <p className="text-sm text-muted-foreground">
               Enterprise-grade Backend-as-a-Service platform for modern applications and services.
@@ -123,7 +123,7 @@ export function Footer() {
         <div className="mt-12 border-t pt-8">
           <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
             <p className="text-sm text-muted-foreground">
-              © {new Date().getFullYear()} BackendPro. All rights reserved.
+              © {new Date().getFullYear()} ApexBase. All rights reserved.
             </p>
             <div className="flex gap-4">
               <Link

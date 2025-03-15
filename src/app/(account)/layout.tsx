@@ -91,7 +91,7 @@ export default function AccountLayout({
           {/* Logo and close button (mobile only) */}
           <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200 dark:border-gray-700">
             <Link href="/account" className="text-xl font-bold text-blue-600 dark:text-blue-500">
-              BackendPro
+              ApexBase
             </Link>
             <button
               onClick={() => setIsSidebarOpen(false)}

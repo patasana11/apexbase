@@ -1,0 +1,10 @@
+{
+    "mcpServers": {
+      "GSB Backend": {
+        "command": "/Users/aiautomation/Documents/Projects/GSB/gsb-mcp-worker/node_modules/.bin/workers-mcp",
+        "args": ["run", "gsb-mcp-worker", "https://gsb-mcp-worker.gsb-backend-mcp.workers.dev", "/Users/aiautomation/Documents/Projects/GSB/gsb-mcp-worker"]
+      }
+  
+    }
+  }
+  

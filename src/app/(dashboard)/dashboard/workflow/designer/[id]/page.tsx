@@ -39,6 +39,16 @@ import {
   Loader2,
   CheckCircle
 } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/components/ui/use-toast";
 
 // Import our custom components and utils
 import {
@@ -50,8 +60,12 @@ import {
   getActivityTypeName
 } from '@/components/workflow/activity-nodes';
 import { WorkflowService } from '@/lib/workflow-service';
+import { GsbWorkflowService } from '@/lib/services/gsb-workflow.service';
 import { workflowToReactFlow, reactFlowToWorkflow, generateId } from '@/lib/workflow-utils';
 import { ActivityType, GsbWorkflow } from '@/models/workflow';
+import { WorkflowMonitorService } from '@/lib/services/workflow-monitor.service';
+import { format } from 'date-fns';
+import { QueryParams } from '@/lib/gsb/types/query-params';
 
 // Define our node types
 const nodeTypes: NodeTypes = {
@@ -77,6 +91,15 @@ export default function WorkflowDesigner() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isTestDialogOpen, setIsTestDialogOpen] = useState(false);
+  const [testData, setTestData] = useState('{}');
+  const [isTestRunning, setIsTestRunning] = useState(false);
+  const { toast } = useToast();
+  const [instances, setInstances] = useState<any[]>([]);
+  const [isLoadingInstances, setIsLoadingInstances] = useState(false);
+
+  const workflowService = new GsbWorkflowService();
+  const monitorService = new WorkflowMonitorService();
 
   // Load workflow data
   useEffect(() => {
@@ -85,16 +108,22 @@ export default function WorkflowDesigner() {
       setError(null);
 
       try {
-        const data = await WorkflowService.getWorkflowById(id as string);
+        const data = await workflowService.getWorkflowById(id as string);
 
         if (data) {
           setWorkflow(data);
-          setWorkflowName(data.name);
+          setWorkflowName(data.name || 'New Workflow');
 
-          // Convert to React Flow format
-          const flowData = workflowToReactFlow(data);
-          setNodes(flowData.nodes);
-          setEdges(flowData.edges);
+          if (isNewWorkflow) {
+            // For new workflow, just set up empty nodes
+            setNodes([]);
+            setEdges([]);
+          } else {
+            // Convert existing workflow to React Flow format
+            const flowData = workflowToReactFlow(data);
+            setNodes(flowData.nodes);
+            setEdges(flowData.edges);
+          }
         } else {
           setError(`Workflow with ID ${id} not found`);
         }
@@ -108,6 +137,31 @@ export default function WorkflowDesigner() {
 
     loadWorkflow();
   }, [id]);
+
+  // Load workflow instances
+  const loadInstances = useCallback(async () => {
+    if (!workflow || isNewWorkflow) return;
+
+    setIsLoadingInstances(true);
+    try {
+      const data = await monitorService.getWorkflowInstances(workflow.id);
+      setInstances(data);
+    } catch (err) {
+      console.error('Error loading workflow instances:', err);
+      toast({
+        title: "Error",
+        description: "Failed to load workflow instances",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingInstances(false);
+    }
+  }, [workflow, isNewWorkflow]);
+
+  // Load instances when workflow changes or after starting a test
+  useEffect(() => {
+    loadInstances();
+  }, [workflow, loadInstances]);
 
   // Handle node selection
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
@@ -226,7 +280,7 @@ export default function WorkflowDesigner() {
       );
 
       // Save workflow
-      const savedWorkflow = await WorkflowService.saveWorkflow(updatedWorkflow);
+      const savedWorkflow = await workflowService.saveWorkflow(updatedWorkflow);
       setWorkflow(savedWorkflow);
 
       // If new workflow, update URL
@@ -245,6 +299,46 @@ export default function WorkflowDesigner() {
       setError('Failed to save workflow');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // Start workflow test
+  const startWorkflowTest = async () => {
+    if (!workflow) return;
+
+    setIsTestRunning(true);
+    try {
+      let data = {};
+      try {
+        data = JSON.parse(testData);
+      } catch (err) {
+        toast({
+          title: "Invalid JSON",
+          description: "Please enter valid JSON data",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      await workflowService.startWorkflow(workflow.id, data);
+      
+      toast({
+        title: "Workflow Started",
+        description: "The workflow test has been initiated successfully.",
+      });
+      
+      setIsTestDialogOpen(false);
+      // Reload instances after starting a test
+      loadInstances();
+    } catch (err) {
+      console.error('Error starting workflow:', err);
+      toast({
+        title: "Error",
+        description: "Failed to start workflow test",
+        variant: "destructive",
+      });
+    } finally {
+      setIsTestRunning(false);
     }
   };
 
@@ -309,6 +403,7 @@ export default function WorkflowDesigner() {
             <Button
               variant="default"
               size="sm"
+              onClick={() => setIsTestDialogOpen(true)}
               disabled={isLoading || isSaving || isNewWorkflow}
             >
               <Play className="h-4 w-4 mr-1" />
@@ -592,20 +687,75 @@ export default function WorkflowDesigner() {
                 <TabsContent value="logs" className="flex-1 overflow-auto p-4">
                   <Card>
                     <CardContent className="p-4">
-                      <h3 className="text-lg font-medium mb-4">Workflow Logs</h3>
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-medium">Workflow Instances</h3>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={loadInstances}
+                          disabled={isLoadingInstances || isNewWorkflow}
+                        >
+                          {isLoadingInstances ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <History className="h-4 w-4" />
+                          )}
+                          <span className="ml-2">Refresh</span>
+                        </Button>
+                      </div>
                       {isNewWorkflow ? (
                         <p className="text-sm text-muted-foreground">
-                          Logs will be available after the workflow is saved and executed.
+                          Instances will be available after the workflow is saved and executed.
                         </p>
+                      ) : isLoadingInstances ? (
+                        <div className="text-center py-8">
+                          <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
+                          <p className="mt-2 text-sm text-muted-foreground">Loading instances...</p>
+                        </div>
+                      ) : instances.length === 0 ? (
+                        <div className="text-center py-8">
+                          <History className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
+                          <p className="text-sm text-muted-foreground">No instances found</p>
+                        </div>
                       ) : (
-                        <p className="text-sm text-muted-foreground">
-                          View logs from workflow execution and debugging information.
-                        </p>
+                        <div className="space-y-4">
+                          {instances.map((instance: any) => (
+                            <Card key={instance.id} className="p-4">
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <h4 className="font-medium">{instance.name || instance.id}</h4>
+                                  <p className="text-sm text-muted-foreground">
+                                    Started: {format(new Date(instance.startDate), 'PPpp')}
+                                  </p>
+                                  {instance.endDate && (
+                                    <p className="text-sm text-muted-foreground">
+                                      Ended: {format(new Date(instance.endDate), 'PPpp')}
+                                    </p>
+                                  )}
+                                </div>
+                                <div className="flex items-center">
+                                  <span className={`px-2 py-1 rounded-full text-xs ${
+                                    instance.status === 'Completed' ? 'bg-green-100 text-green-800' :
+                                    instance.status === 'Running' ? 'bg-blue-100 text-blue-800' :
+                                    instance.status === 'Failed' ? 'bg-red-100 text-red-800' :
+                                    'bg-gray-100 text-gray-800'
+                                  }`}>
+                                    {instance.status}
+                                  </span>
+                                </div>
+                              </div>
+                              {instance.currentActivity && (
+                                <div className="mt-2 pt-2 border-t">
+                                  <p className="text-sm">
+                                    <span className="text-muted-foreground">Current Activity:</span>{' '}
+                                    {instance.currentActivity.name}
+                                  </p>
+                                </div>
+                              )}
+                            </Card>
+                          ))}
+                        </div>
                       )}
-                      <div className="mt-4 text-center">
-                        <History className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
-                        <p className="text-sm">No logs available</p>
-                      </div>
                     </CardContent>
                   </Card>
                 </TabsContent>
@@ -614,6 +764,55 @@ export default function WorkflowDesigner() {
           </>
         )}
       </div>
+
+      {/* Test Dialog */}
+      <Dialog open={isTestDialogOpen} onOpenChange={setIsTestDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Test Workflow</DialogTitle>
+            <DialogDescription>
+              Enter test data in JSON format to start a new workflow instance.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Input Data (JSON)</Label>
+              <Textarea
+                placeholder="{}"
+                value={testData}
+                onChange={(e) => setTestData(e.target.value)}
+                className="font-mono"
+                rows={10}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsTestDialogOpen(false)}
+              disabled={isTestRunning}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={startWorkflowTest}
+              disabled={isTestRunning}
+            >
+              {isTestRunning ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  Starting...
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4 mr-1" />
+                  Start Test
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

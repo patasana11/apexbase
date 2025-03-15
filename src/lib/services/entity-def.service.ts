@@ -258,14 +258,10 @@ export class EntityDefService {
         isDeleted: true
       };
 
-      // Set update date fields
-      const entityWithDates = setGsbUpdateFields(updatedEntityDef);
 
       const request: GsbSaveRequest = {
         entDefName: this.ENTITY_NAME,
-        entity: entityWithDates,
-        entityDef: {},
-        entityId: '',
+        entityId: id,
         entDefId: '',
         query: []
       };

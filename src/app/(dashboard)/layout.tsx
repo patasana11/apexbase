@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   FiActivity,
   FiBarChart,
@@ -60,12 +61,15 @@ function NavItem({
   isCollapsed,
   isSubItem = false,
 }: NavItemProps) {
+  const pathname = usePathname();
+  const isActive = pathname === href || pathname.startsWith(`${href}/`);
+
   return (
     <Link
       href={href}
       className={cn(
         "flex items-center gap-x-2 rounded-lg px-3 py-2 text-sm transition-all",
-        active
+        isActive
           ? "bg-accent text-accent-foreground"
           : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
         isCollapsed && "justify-center",
@@ -199,7 +203,7 @@ export default function DashboardLayout({
                   <div className="absolute inset-1 rounded-full bg-background"></div>
                   <div className="absolute inset-2 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600"></div>
                 </div>
-                <span className="font-bold">BackendPro</span>
+                <span className="font-bold">ApexBase</span>
               </Link>
               <Separator className="mb-4" />
               <ScrollArea className="h-[calc(100vh-120px)]">
@@ -253,6 +257,11 @@ export default function DashboardLayout({
                     title="Functions"
                   />
                   <NavItem
+                    href="/dashboard/workflow"
+                    icon={<FiLayers className="h-4 w-4" />}
+                    title="Workflow"
+                  />
+                  <NavItem
                     href="/dashboard/realtime"
                     icon={<FiZap className="h-4 w-4" />}
                     title="Realtime"
@@ -285,7 +294,7 @@ export default function DashboardLayout({
               <div className="absolute inset-1 rounded-full bg-background"></div>
               <div className="absolute inset-2 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600"></div>
             </div>
-            <span className="font-bold">BackendPro</span>
+            <span className="font-bold">ApexBase</span>
           </Link>
 
           {/* Desktop search */}
@@ -490,6 +499,12 @@ export default function DashboardLayout({
                       href="/dashboard/functions"
                       icon={<FiCode className="h-4 w-4" />}
                       title="Functions"
+                      isCollapsed={isCollapsed}
+                    />
+                    <NavItem
+                      href="/dashboard/workflow"
+                      icon={<FiLayers className="h-4 w-4" />}
+                      title="Workflow"
                       isCollapsed={isCollapsed}
                     />
                     <NavItem

@@ -16,7 +16,7 @@ export default function AuthLayout({
               <div className="absolute inset-1 rounded-full bg-background"></div>
               <div className="absolute inset-2 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600"></div>
             </div>
-            <span className="font-bold">BackendPro</span>
+            <span className="font-bold">ApexBase</span>
           </Link>
           <div className="ml-auto">
             <ThemeToggle />
@@ -29,7 +29,7 @@ export default function AuthLayout({
         </div>
         <div className="flex h-14 items-center justify-between border-t px-4 lg:h-[60px] lg:px-6">
           <div className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} BackendPro. All rights reserved.
+            © {new Date().getFullYear()} ApexBase. All rights reserved.
           </div>
           <div className="flex items-center gap-4">
             <Link

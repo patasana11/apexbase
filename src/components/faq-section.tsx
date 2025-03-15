@@ -10,24 +10,24 @@ import { Button } from "@/components/ui/button";
 export function FAQSection() {
   const faqs = [
     {
-      question: "What is BackendPro?",
+      question: "What is ApexBase?",
       answer:
-        "BackendPro is a complete Backend-as-a-Service (BaaS) platform that provides all the backend infrastructure you need to build modern applications. It includes authentication, database, storage, serverless functions, and more, all in a unified platform.",
+        "ApexBase is a complete Backend-as-a-Service (BaaS) platform that provides all the backend infrastructure you need to build modern applications. It includes authentication, database, storage, serverless functions, and more, all in a unified platform.",
     },
     {
-      question: "How secure is BackendPro?",
+      question: "How secure is ApexBase?",
       answer:
-        "BackendPro employs bank-level security measures including end-to-end encryption, regular security audits, SOC 2 compliance, and more. Our platform is designed with a security-first approach and undergoes regular penetration testing to ensure your data remains protected.",
+        "ApexBase employs bank-level security measures including end-to-end encryption, regular security audits, SOC 2 compliance, and more. Our platform is designed with a security-first approach and undergoes regular penetration testing to ensure your data remains protected.",
     },
     {
       question: "Can I migrate from Firebase or Supabase?",
       answer:
-        "Yes, we offer migration tools and guides to help you smoothly transition from Firebase, Supabase, or other BaaS platforms to BackendPro. Our migration assistants help automate much of the process while ensuring data integrity and security during the transfer.",
+        "Yes, we offer migration tools and guides to help you smoothly transition from Firebase, Supabase, or other BaaS platforms to ApexBase. Our migration assistants help automate much of the process while ensuring data integrity and security during the transfer.",
     },
     {
-      question: "What kind of applications can I build with BackendPro?",
+      question: "What kind of applications can I build with ApexBase?",
       answer:
-        "BackendPro is versatile and can support virtually any type of application - from web and mobile apps to IoT systems, enterprise solutions, and more. Our platform is used by developers building everything from small personal projects to large-scale enterprise applications.",
+        "ApexBase is versatile and can support virtually any type of application - from web and mobile apps to IoT systems, enterprise solutions, and more. Our platform is used by developers building everything from small personal projects to large-scale enterprise applications.",
     },
     {
       question: "Do you offer a free tier?",
@@ -45,9 +45,9 @@ export function FAQSection() {
         "Support varies by plan. Free tier users have access to our community forums and documentation. Pro users receive email support with 24-hour response times. Business users get priority support with faster response times. Enterprise customers receive dedicated support with custom SLAs and a designated account manager.",
     },
     {
-      question: "Can I self-host BackendPro?",
+      question: "Can I self-host ApexBase?",
       answer:
-        "Yes, enterprise customers have the option to self-host BackendPro in their own infrastructure or private cloud environment. This option provides maximum control and can help meet specific regulatory or compliance requirements. Contact our sales team for more information.",
+        "Yes, enterprise customers have the option to self-host ApexBase in their own infrastructure or private cloud environment. This option provides maximum control and can help meet specific regulatory or compliance requirements. Contact our sales team for more information.",
     },
   ];
 
@@ -59,7 +59,7 @@ export function FAQSection() {
             Frequently Asked Questions
           </h2>
           <p className="text-xl text-muted-foreground">
-            Everything you need to know about BackendPro
+            Everything you need to know about ApexBase
           </p>
         </div>
 

@@ -5,6 +5,7 @@ import { Inter as FontSans } from "next/font/google";
 import TenantInitializer from "@/components/tenant-initializer";
 import ClientBody from "./ClientBody";
 import { cn } from "@/lib/utils";
+import { Toaster } from "@/components/ui/toaster"
 
 // Font configuration
 const fontSans = FontSans({
@@ -74,6 +75,7 @@ export default function RootLayout({
           <TenantInitializer />
         </Suspense>
         <ClientBody>{children}</ClientBody>
+        <Toaster />
       </body>
     </html>
   );

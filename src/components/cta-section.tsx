@@ -15,7 +15,7 @@ export function CTASection() {
             Ready to build your next great idea?
           </h2>
           <p className="mb-10 text-xl text-blue-100">
-            Get started with BackendPro today and join thousands of developers building secure, scalable applications.
+            Get started with ApexBase today and join thousands of developers building secure, scalable applications.
           </p>
 
           <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">

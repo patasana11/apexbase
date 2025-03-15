@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { PlusCircle, Filter, PlayCircle, Settings } from "lucide-react";
 import { useRouter } from 'next/navigation';
+import { FiPlus } from 'react-icons/fi';
 
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -76,7 +77,7 @@ const formatDate = (dateString: string | null) => {
   }).format(date);
 };
 
-export default function WorkflowDashboard() {
+export default function WorkflowPage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [workflows, setWorkflows] = useState(mockWorkflows);
@@ -94,13 +95,10 @@ export default function WorkflowDashboard() {
     wf.description.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Navigate to workflow designer
-  const navigateToDesigner = (workflowId?: string) => {
-    if (workflowId) {
-      router.push(`/dashboard/workflow/designer/${workflowId}`);
-    } else {
-      router.push('/dashboard/workflow/designer/new');
-    }
+  const handleCreateWorkflow = () => {
+    // Generate a temporary ID for the new workflow
+    const tempId = 'new';
+    router.push(`/dashboard/workflow/designer/${tempId}`);
   };
 
   return (
@@ -110,9 +108,9 @@ export default function WorkflowDashboard() {
           <h1 className="text-3xl font-bold">Workflow Management</h1>
           <p className="text-muted-foreground mt-1">Create and manage workflow processes</p>
         </div>
-        <Button onClick={() => navigateToDesigner()}>
-          <PlusCircle className="mr-2 h-4 w-4" />
-          New Workflow
+        <Button onClick={handleCreateWorkflow}>
+          <FiPlus className="h-4 w-4 mr-2" />
+          Create Workflow
         </Button>
       </div>
 
@@ -205,7 +203,7 @@ export default function WorkflowDashboard() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => navigateToDesigner(workflow.id)}
+                          onClick={() => router.push(`/dashboard/workflow/designer/${workflow.id}`)}
                         >
                           <Settings className="h-4 w-4 mr-1" />
                           Design
@@ -223,8 +221,8 @@ export default function WorkflowDashboard() {
                   : "You haven't created any workflows yet."
                 }
                 action={!searchQuery ? (
-                  <Button onClick={() => navigateToDesigner()}>
-                    <PlusCircle className="mr-2 h-4 w-4" />
+                  <Button onClick={handleCreateWorkflow}>
+                    <FiPlus className="h-4 w-4 mr-2" />
                     Create your first workflow
                   </Button>
                 ) : undefined}
