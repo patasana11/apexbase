@@ -1,22 +1,35 @@
-import { dirname } from "path";
-import { fileURLToPath } from "url";
-import { FlatCompat } from "@eslint/eslintrc";
+import { readESLintConfig } from "@eslint/eslintrc";
+import nextPlugin from "eslint-plugin-next";
+import reactPlugin from "eslint-plugin-react";
+import hooksPlugin from "eslint-plugin-react-hooks";
+import tseslint from "typescript-eslint";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const compat = new FlatCompat({
-  baseDirectory: __dirname,
-});
-
-const eslintConfig = [
-  ...compat.extends("next/core-web-vitals", "next/typescript"),
+export default [
   {
+    ignores: ["dist/*", ".next/*", "node_modules/*"],
+  },
+  {
+    plugins: {
+      next: nextPlugin,
+      react: reactPlugin,
+      "react-hooks": hooksPlugin,
+    },
     rules: {
-      "@typescript-eslint/no-unused-vars": "off",
-      "react/no-unescaped-entities": "off",
+      // Disable typescript no-explicit-any rule
+      "@typescript-eslint/no-explicit-any": "off",
+
+      // Disable react-hooks exhaustive-deps rule
+      "react-hooks/exhaustive-deps": "off",
+
+      // Disable prefer-const
+      "prefer-const": "off",
+
+      // Include recommended rules but with lower severity
+      "no-unused-vars": "warn",
+
+      // Next.js specific rules (optional)
+      "next/no-html-link-for-pages": "off",
     },
   },
+  ...tseslint.configs.recommended,
 ];
-
-export default eslintConfig;

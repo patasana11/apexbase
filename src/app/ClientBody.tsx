@@ -8,22 +8,20 @@ export default function ClientBody({
 }: {
   children: React.ReactNode;
 }) {
-  // Remove any extension-added classes during hydration
+  // Remove extension-added classes during hydration
   useEffect(() => {
     // This runs only on the client after hydration
-    document.body.className = "antialiased";
+    document.body.className = document.body.className.replace(/js-focus-visible/g, '');
   }, []);
 
   return (
-    <body className="antialiased" suppressHydrationWarning>
-      <ThemeProvider
-        attribute="class"
-        defaultTheme="system"
-        enableSystem
-        disableTransitionOnChange
-      >
-        {children}
-      </ThemeProvider>
-    </body>
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="system"
+      enableSystem
+      disableTransitionOnChange
+    >
+      {children}
+    </ThemeProvider>
   );
 }

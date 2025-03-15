@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   FiDatabase,
   FiPlus,
@@ -15,7 +15,8 @@ import {
   FiLock,
   FiMoreHorizontal,
   FiDownload,
-  FiFilter
+  FiFilter,
+  FiLoader
 } from "react-icons/fi";
 import {
   Card,
@@ -50,74 +51,165 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
+import { GsbEntityDef } from "@/lib/models/gsb-entity-def.model";
+import { EntityDefService } from "@/lib/services/entity-def.service";
+import { setGsbToken, setGsbTenantCode } from "@/lib/config/gsb-config";
+import ClientOnly from "@/components/client-only";
+
+// Constants
+const GSB_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiJiZjE1MjRiNy04MjBmLTQ2NGYtOWYzNC02ZWQ2Y2Q5NjVlNjEiLCJ0YyI6ImRldjEiLCJpIjoiOThCNUU0OUQiLCJleHAiOjE3NDMwMDcwMzQsImlzcyI6IkBnc2IifQ.0WImy6Y1XmC0RwJPG-Y3teTlAA4wL17rgDYARyySciQ";
+const GSB_TENANT = "dev1";
 
 export default function DatabasePage() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [entityDefs, setEntityDefs] = useState<GsbEntityDef[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [isClient, setIsClient] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<string | null>(null);
 
-  // Mock data for tables
-  const tables = [
-    {
-      name: "users",
-      rows: 4829,
-      size: "2.3 MB",
-      lastModified: "2 hours ago",
-      type: "table",
-      hasRLS: true,
-    },
-    {
-      name: "products",
-      rows: 1253,
-      size: "5.6 MB",
-      lastModified: "1 day ago",
-      type: "table",
-      hasRLS: true,
-    },
-    {
-      name: "orders",
-      rows: 9721,
-      size: "8.2 MB",
-      lastModified: "3 hours ago",
-      type: "table",
-      hasRLS: true,
-    },
-    {
-      name: "transactions",
-      rows: 18329,
-      size: "12.4 MB",
-      lastModified: "30 minutes ago",
-      type: "table",
-      hasRLS: true,
-    },
-    {
-      name: "categories",
-      rows: 42,
-      size: "0.3 MB",
-      lastModified: "5 days ago",
-      type: "table",
-      hasRLS: false,
-    },
-    {
-      name: "active_users_view",
-      rows: 1253,
-      size: "0.8 MB",
-      lastModified: "1 day ago",
-      type: "view",
-      hasRLS: false,
-    },
-    {
-      name: "product_analytics",
-      rows: 5362,
-      size: "3.1 MB",
-      lastModified: "12 hours ago",
-      type: "materialized view",
-      hasRLS: false,
-    },
-  ];
+  // Mark when component is mounted on client
+  useEffect(() => {
+    console.log("Component mounted, setting isClient = true");
+    setIsClient(true);
+  }, []);
 
-  // Filter tables based on search query
-  const filteredTables = tables.filter(table =>
-    table.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Initialize token and service when component mounts
+  useEffect(() => {
+    if (!isClient) return;
+
+    console.log("Setting up GSB token and tenant code...");
+
+    try {
+      // Parse JWT token to confirm it's valid
+      const tokenParts = GSB_TOKEN.split('.');
+      if (tokenParts.length === 3) {
+        const payload = JSON.parse(atob(tokenParts[1]));
+        console.log("Token payload:", payload);
+        setDebugInfo(`Token tenant: ${payload.tc}, uid: ${payload.uid}, expiry: ${new Date(payload.exp * 1000).toLocaleString()}`);
+      } else {
+        console.error("Invalid token format, doesn't have 3 parts");
+        setDebugInfo("Invalid token format");
+      }
+    } catch (error) {
+      console.error("Error parsing token:", error);
+      setDebugInfo(`Error parsing token: ${error}`);
+    }
+
+    // Set the GSB token and tenant code for the service to use
+    setGsbToken(GSB_TOKEN);
+    setGsbTenantCode(GSB_TENANT);
+
+    // Initial data fetch
+    console.log("Running initial data fetch...");
+    fetchEntityDefs(currentPage, searchQuery);
+  }, [isClient]);
+
+  // Update when page changes
+  useEffect(() => {
+    if (!isClient) return;
+    console.log(`Page changed to ${currentPage}, fetching data...`);
+    fetchEntityDefs(currentPage, searchQuery);
+  }, [currentPage, isClient]);
+
+  // Fetch entity definitions using the service
+  const fetchEntityDefs = async (page: number = 1, search: string = "") => {
+    if (!isClient) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      console.log(`Fetching entity definitions - page: ${page}, search: ${search}`);
+
+      const entityDefService = new EntityDefService();
+      console.log("EntityDefService created");
+
+      let result;
+
+      if (search) {
+        console.log(`Searching entity definitions with term: ${search}`);
+        result = await entityDefService.searchEntityDefs(search, page, pageSize);
+      } else {
+        console.log(`Getting all entity definitions - page ${page}`);
+        result = await entityDefService.getEntityDefs(page, pageSize);
+      }
+
+      console.log(`Fetched ${result.entityDefs.length} entity definitions. Total: ${result.totalCount}`);
+
+      if (result.entityDefs.length > 0) {
+        console.log("Sample entity def:", result.entityDefs[0]);
+      }
+
+      setEntityDefs(result.entityDefs);
+      setTotalCount(result.totalCount);
+    } catch (error) {
+      console.error("Error fetching entity definitions:", error);
+      setError(`Failed to fetch data: ${error instanceof Error ? error.message : String(error)}`);
+      setEntityDefs([]);
+      setTotalCount(0);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle search
+  const handleSearch = () => {
+    if (!isClient) return;
+    console.log(`Searching for term: ${searchQuery}`);
+    setCurrentPage(1); // Reset to first page when searching
+    fetchEntityDefs(1, searchQuery);
+  };
+
+  // Handle pagination
+  const handlePreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (currentPage * pageSize < totalCount) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  // Format date string safely - ensure consistent output to avoid hydration issues
+  const formatDate = (dateStr: string | Date | undefined) => {
+    if (!dateStr) return "N/A";
+
+    // Just return a static string in server rendering to avoid hydration mismatch
+    if (!isClient) return "N/A";
+
+    try {
+      const dateObj = new Date(dateStr);
+      if (isNaN(dateObj.getTime())) return "N/A";
+      return dateObj.toLocaleDateString();
+    } catch (error) {
+      return "N/A";
+    }
+  };
+
+  // Initial loading state - show simple loading without hydration-sensitive elements
+  if (!isClient) {
+    return (
+      <div className="flex flex-col gap-6 p-4 md:gap-8 md:p-8">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-3xl font-bold tracking-tight">Database</h1>
+          <p className="text-muted-foreground">
+            Manage your databases, tables, and relationships.
+          </p>
+        </div>
+        <div className="flex h-[60vh] items-center justify-center">
+          <div className="h-8 w-8" />
+          <span className="ml-2">Loading...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6 p-4 md:gap-8 md:p-8">
@@ -145,8 +237,13 @@ export default function DatabasePage() {
                 className="pl-8 sm:w-[200px] md:w-[300px]"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               />
             </div>
+            <Button onClick={handleSearch}>
+              <FiSearch className="mr-2 h-4 w-4" />
+              Search
+            </Button>
             <Button>
               <FiPlus className="mr-2 h-4 w-4" />
               New Table
@@ -158,7 +255,7 @@ export default function DatabasePage() {
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle>Database Tables and Views</CardTitle>
+                <CardTitle>Database Tables</CardTitle>
                 <div className="flex items-center gap-2">
                   <Button variant="outline" size="sm">
                     <FiFilter className="mr-2 h-4 w-4" />
@@ -171,89 +268,131 @@ export default function DatabasePage() {
                 </div>
               </div>
               <CardDescription>
-                Manage your database tables, views, and materialized views.
+                Manage your database tables and entity definitions.
               </CardDescription>
+              {debugInfo && (
+                <div className="mt-2 text-xs text-muted-foreground">
+                  <code>{debugInfo}</code>
+                </div>
+              )}
             </CardHeader>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead className="hidden md:table-cell">Rows</TableHead>
-                    <TableHead className="hidden md:table-cell">Size</TableHead>
-                    <TableHead className="hidden md:table-cell">Last Modified</TableHead>
-                    <TableHead className="hidden md:table-cell">RLS</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredTables.map((table) => (
-                    <TableRow key={table.name}>
-                      <TableCell className="font-medium">{table.name}</TableCell>
-                      <TableCell>
-                        <Badge variant={table.type === "table" ? "default" : table.type === "view" ? "outline" : "secondary"}>
-                          {table.type}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">{table.rows.toLocaleString()}</TableCell>
-                      <TableCell className="hidden md:table-cell">{table.size}</TableCell>
-                      <TableCell className="hidden md:table-cell">{table.lastModified}</TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        {table.hasRLS ? <FiLock className="h-4 w-4 text-green-500" /> : null}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                            >
-                              <FiMoreHorizontal className="h-4 w-4" />
-                              <span className="sr-only">Actions</span>
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem className="cursor-pointer">
-                              <FiEye className="mr-2 h-4 w-4" />
-                              Browse Data
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="cursor-pointer">
-                              <FiEdit2 className="mr-2 h-4 w-4" />
-                              Edit Structure
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="cursor-pointer">
-                              <FiSettings className="mr-2 h-4 w-4" />
-                              Manage Policies
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem className="cursor-pointer">
-                              <FiCopy className="mr-2 h-4 w-4" />
-                              Duplicate
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="cursor-pointer text-red-600">
-                              <FiTrash2 className="mr-2 h-4 w-4" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
+              {error && (
+                <div className="p-4 mb-4 text-red-700 bg-red-100 rounded-md">
+                  <p>{error}</p>
+                </div>
+              )}
+              <ClientOnly>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Database Table</TableHead>
+                      <TableHead className="hidden md:table-cell">Title</TableHead>
+                      <TableHead className="hidden md:table-cell">Status</TableHead>
+                      <TableHead className="hidden md:table-cell">Last Modified</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {loading ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="h-24 text-center">
+                          <div className="flex items-center justify-center">
+                            <FiLoader className="h-6 w-6 animate-spin mr-2" />
+                            <span>Loading tables...</span>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : entityDefs.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="h-24 text-center">
+                          No tables found
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      entityDefs.map((entityDef) => (
+                        <TableRow key={entityDef.id}>
+                          <TableCell className="font-medium">{entityDef.name}</TableCell>
+                          <TableCell>{entityDef.dbTableName || 'N/A'}</TableCell>
+                          <TableCell className="hidden md:table-cell">
+                            {entityDef.title || 'N/A'}
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell">
+                            <Badge variant={entityDef.isActive !== false ? 'default' : 'secondary'}>
+                              {entityDef.isActive !== false ? 'Active' : 'Inactive'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell">
+                            {formatDate(entityDef.lastUpdateDate)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                >
+                                  <FiMoreHorizontal className="h-4 w-4" />
+                                  <span className="sr-only">Actions</span>
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem className="cursor-pointer">
+                                  <FiEye className="mr-2 h-4 w-4" />
+                                  Browse Data
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="cursor-pointer">
+                                  <FiEdit2 className="mr-2 h-4 w-4" />
+                                  Edit Structure
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="cursor-pointer">
+                                  <FiSettings className="mr-2 h-4 w-4" />
+                                  Manage Policies
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="cursor-pointer">
+                                  <FiCopy className="mr-2 h-4 w-4" />
+                                  Duplicate
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="cursor-pointer text-red-600">
+                                  <FiTrash2 className="mr-2 h-4 w-4" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </ClientOnly>
             </CardContent>
             <CardFooter className="flex items-center justify-between border-t px-6 py-4">
               <div className="text-sm text-muted-foreground">
-                Showing <strong>{filteredTables.length}</strong> of{" "}
-                <strong>{tables.length}</strong> tables
+                Showing <strong>{entityDefs.length}</strong> of{" "}
+                <strong>{totalCount !== -1 ? totalCount : 'many'}</strong> tables
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" disabled>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage <= 1 || loading}
+                  onClick={handlePreviousPage}
+                >
                   Previous
                 </Button>
-                <Button variant="outline" size="sm" disabled>
+                <span className="mx-2">
+                  Page {currentPage}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={(totalCount !== -1 && currentPage * pageSize >= totalCount) || loading}
+                  onClick={handleNextPage}
+                >
                   Next
                 </Button>
               </div>
@@ -272,25 +411,42 @@ export default function DatabasePage() {
                       Total Tables
                     </div>
                     <div className="text-2xl font-bold">
-                      {tables.filter(t => t.type === "table").length}
+                      <ClientOnly>
+                        {loading ? <FiLoader className="h-4 w-4 animate-spin" /> :
+                        totalCount !== -1 ? totalCount : 'Many'}
+                      </ClientOnly>
                     </div>
                   </div>
                   <Separator />
                   <div>
                     <div className="text-sm font-medium text-muted-foreground">
-                      Total Rows
+                      Active Tables
                     </div>
                     <div className="text-2xl font-bold">
-                      {tables.reduce((acc, table) => acc + table.rows, 0).toLocaleString()}
+                      <ClientOnly>
+                        {loading ? <FiLoader className="h-4 w-4 animate-spin" /> :
+                          entityDefs.filter(def => def.isActive !== false).length}
+                      </ClientOnly>
                     </div>
                   </div>
                   <Separator />
                   <div>
                     <div className="text-sm font-medium text-muted-foreground">
-                      Database Size
+                      Table Types
                     </div>
-                    <div className="text-2xl font-bold">
-                      32.7 MB
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      <ClientOnly>
+                        {!loading && entityDefs.length > 0 && (
+                          <>
+                            <Badge variant="default" className="text-xs">
+                              {entityDefs.filter(def => def.name?.startsWith('Gsb')).length} System
+                            </Badge>
+                            <Badge variant="outline" className="text-xs">
+                              {entityDefs.filter(def => !def.name?.startsWith('Gsb')).length} Custom
+                            </Badge>
+                          </>
+                        )}
+                      </ClientOnly>
                     </div>
                   </div>
                 </div>

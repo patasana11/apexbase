@@ -24,12 +24,14 @@ export class EntityDefService {
    */
   async getEntityDefById(id: string): Promise<GsbEntityDef | null> {
     try {
+      console.log('Getting entity definition by ID:', id);
       const entityDef = await this.entityService.getById<GsbEntityDef>(
         this.ENTITY_NAME,
         id,
         getGsbToken(),
         getGsbTenantCode()
       );
+      console.log('Entity definition result:', entityDef);
       return entityDef;
     } catch (error) {
       console.error('Error getting entity definition by ID:', error);
@@ -48,6 +50,8 @@ export class EntityDefService {
     pageSize: number = 10
   ): Promise<{ entityDefs: GsbEntityDef[]; totalCount: number }> {
     try {
+      console.log(`Getting entity definitions - page: ${page}, pageSize: ${pageSize}`);
+
       const query = new QueryParams<GsbEntityDef>(this.ENTITY_NAME);
 
       // Set pagination
@@ -58,11 +62,23 @@ export class EntityDefService {
       // Sort by lastUpdateDate
       query.sortCols = getGsbDateSortCols();
 
+      console.log('Query params:', JSON.stringify(query));
+
+      const token = getGsbToken();
+      const tenantCode = getGsbTenantCode();
+
+      console.log('Using token:', token ? 'Token available' : 'No token');
+      console.log('Using tenant code:', tenantCode);
+
       const response = await this.entityService.query(
         query,
-        getGsbToken(),
-        getGsbTenantCode()
+        token,
+        tenantCode
       );
+
+      console.log('Query response:', response ? 'Response received' : 'No response');
+      console.log('Entity definitions count:', response.entities?.length || 0);
+      console.log('Total count:', response.totalCount || 0);
 
       return {
         entityDefs: (response.entities || []) as GsbEntityDef[],
@@ -70,6 +86,11 @@ export class EntityDefService {
       };
     } catch (error) {
       console.error('Error getting entity definitions:', error);
+      // Log the error in more detail
+      if (error instanceof Error) {
+        console.error('Error details:', error.message);
+        console.error('Error stack:', error.stack);
+      }
       return { entityDefs: [], totalCount: 0 };
     }
   }
@@ -87,6 +108,8 @@ export class EntityDefService {
     pageSize: number = 10
   ): Promise<{ entityDefs: GsbEntityDef[]; totalCount: number }> {
     try {
+      console.log(`Searching entity definitions - term: "${searchTerm}", page: ${page}, pageSize: ${pageSize}`);
+
       const query = new QueryParams<GsbEntityDef>(this.ENTITY_NAME);
 
       // Set search filter
@@ -99,11 +122,17 @@ export class EntityDefService {
       query.count = pageSize;
       query.calcTotalCount = true;
 
+      console.log('Search query params:', JSON.stringify(query));
+
       const response = await this.entityService.query(
         query,
         getGsbToken(),
         getGsbTenantCode()
       );
+
+      console.log('Search response:', response ? 'Response received' : 'No response');
+      console.log('Search results count:', response.entities?.length || 0);
+      console.log('Total count:', response.totalCount || 0);
 
       return {
         entityDefs: (response.entities || []) as GsbEntityDef[],
@@ -111,6 +140,11 @@ export class EntityDefService {
       };
     } catch (error) {
       console.error('Error searching entity definitions:', error);
+      // Log the error in more detail
+      if (error instanceof Error) {
+        console.error('Error details:', error.message);
+        console.error('Error stack:', error.stack);
+      }
       return { entityDefs: [], totalCount: 0 };
     }
   }

@@ -31,11 +31,6 @@ const nextConfig = {
   },
   // Other options
   reactStrictMode: true,
-  swcMinify: true,
-  // Experimental features
-  experimental: {
-    serverActions: true,
-  },
 };
 
-export default nextConfig;
+module.exports = nextConfig;

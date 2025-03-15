@@ -1,21 +1,25 @@
-import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import ClientBody from "./ClientBody";
+import TenantInitializer from "@/components/tenant-initializer";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
   subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
   title: "BackendPro | Enterprise-Grade Backend as a Service",
-  description: "Secure, scalable backend infrastructure for modern applications. Authentication, database, storage, functions, and more in one unified platform.",
+  description:
+    "Secure, scalable backend infrastructure for modern applications. Authentication, database, storage, functions, and more in one unified platform.",
+  authors: [
+    {
+      name: "BackendPro",
+    },
+  ],
+  creator: "BackendPro",
+  publisher: "BackendPro",
   keywords: [
     "backend as a service",
     "BaaS",
@@ -28,32 +32,22 @@ export const metadata: Metadata = {
     "API",
     "enterprise security",
   ],
-  authors: [{ name: "BackendPro" }],
-  creator: "BackendPro",
-  publisher: "BackendPro",
   openGraph: {
-    type: "website",
-    locale: "en_US",
-    url: "https://backendpro.com",
     title: "BackendPro | Enterprise-Grade Backend as a Service",
-    description: "Secure, scalable backend infrastructure for modern applications. Authentication, database, storage, functions, and more in one unified platform.",
+    description:
+      "Secure, scalable backend infrastructure for modern applications. Authentication, database, storage, functions, and more in one unified platform.",
+    url: "https://backendpro.com",
     siteName: "BackendPro",
+    locale: "en_US",
+    type: "website",
   },
   twitter: {
     card: "summary_large_image",
     title: "BackendPro | Enterprise-Grade Backend as a Service",
-    description: "Secure, scalable backend infrastructure for modern applications. Authentication, database, storage, functions, and more in one unified platform.",
+    description:
+      "Secure, scalable backend infrastructure for modern applications. Authentication, database, storage, functions, and more in one unified platform.",
     creator: "@backendpro",
   },
-};
-
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#0f172a" },
-  ],
 };
 
 export default function RootLayout({
@@ -62,10 +56,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
-      <ClientBody>
-        {children}
-      </ClientBody>
+    <html lang="en" className={inter.className}>
+      <body className="antialiased">
+        <TenantInitializer />
+        <ClientBody>{children}</ClientBody>
+      </body>
     </html>
   );
 }
