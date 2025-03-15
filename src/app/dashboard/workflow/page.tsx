@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { PlusCircle, Filter, PlayCircle, Settings } from "lucide-react";
+import { PlusCircle, Filter, Clock, PlayCircle, Settings } from "lucide-react";
 import { useRouter } from 'next/navigation';
 
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +10,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+
+import DashboardShell from '@/components/dashboard-shell';
+import DashboardHeader from '@/components/dashboard-header';
+import EmptyPlaceholder from '@/components/empty-placeholder';
 
 // Mocked workflow data for demonstration
 const mockWorkflows = [
@@ -104,17 +108,16 @@ export default function WorkflowDashboard() {
   };
 
   return (
-    <div className="container py-6 mx-auto max-w-7xl">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-3xl font-bold">Workflow Management</h1>
-          <p className="text-muted-foreground mt-1">Create and manage workflow processes</p>
-        </div>
+    <DashboardShell>
+      <DashboardHeader
+        heading="Workflow Management"
+        description="Create and manage workflow processes"
+      >
         <Button onClick={() => navigateToDesigner()}>
           <PlusCircle className="mr-2 h-4 w-4" />
           New Workflow
         </Button>
-      </div>
+      </DashboardHeader>
 
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -216,45 +219,56 @@ export default function WorkflowDashboard() {
                 ))}
               </div>
             ) : (
-              <EmptyState
-                title="No workflows found"
-                description={searchQuery
-                  ? `No workflows match "${searchQuery}"`
-                  : "You haven't created any workflows yet."
-                }
-                action={!searchQuery ? (
+              <EmptyPlaceholder>
+                <EmptyPlaceholder.Icon name="workflow" />
+                <EmptyPlaceholder.Title>No workflows found</EmptyPlaceholder.Title>
+                <EmptyPlaceholder.Description>
+                  {searchQuery
+                    ? `No workflows match "${searchQuery}"`
+                    : "You haven't created any workflows yet."}
+                </EmptyPlaceholder.Description>
+                {!searchQuery && (
                   <Button onClick={() => navigateToDesigner()}>
                     <PlusCircle className="mr-2 h-4 w-4" />
                     Create your first workflow
                   </Button>
-                ) : undefined}
-              />
+                )}
+              </EmptyPlaceholder>
             )}
           </TabsContent>
 
           <TabsContent value="active">
-            <EmptyState
-              title="Active Workflows"
-              description="View and manage your active workflows."
-            />
+            <EmptyPlaceholder>
+              <EmptyPlaceholder.Icon name="workflow" />
+              <EmptyPlaceholder.Title>Active Workflows</EmptyPlaceholder.Title>
+              <EmptyPlaceholder.Description>
+                View and manage your active workflows.
+              </EmptyPlaceholder.Description>
+            </EmptyPlaceholder>
           </TabsContent>
 
           <TabsContent value="drafts">
-            <EmptyState
-              title="Draft Workflows"
-              description="Continue working on your unfinished workflows."
-            />
+            <EmptyPlaceholder>
+              <EmptyPlaceholder.Icon name="draft" />
+              <EmptyPlaceholder.Title>Draft Workflows</EmptyPlaceholder.Title>
+              <EmptyPlaceholder.Description>
+                Continue working on your unfinished workflows.
+              </EmptyPlaceholder.Description>
+            </EmptyPlaceholder>
           </TabsContent>
 
           <TabsContent value="instances">
-            <EmptyState
-              title="Workflow Instances"
-              description="View and manage running workflow instances."
-            />
+            <EmptyPlaceholder>
+              <EmptyPlaceholder.Icon name="instance" />
+              <EmptyPlaceholder.Title>Workflow Instances</EmptyPlaceholder.Title>
+              <EmptyPlaceholder.Description>
+                View and manage running workflow instances.
+              </EmptyPlaceholder.Description>
+            </EmptyPlaceholder>
           </TabsContent>
         </Tabs>
       </div>
-    </div>
+    </DashboardShell>
   );
 }
 
@@ -265,63 +279,25 @@ function StatusBadge({ status }: { status: string }) {
 
   switch (status) {
     case 'active':
-      color = 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
+      color = 'bg-green-100 text-green-800';
       label = 'Active';
       break;
     case 'paused':
-      color = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
+      color = 'bg-yellow-100 text-yellow-800';
       label = 'Paused';
       break;
     case 'draft':
-      color = 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300';
+      color = 'bg-blue-100 text-blue-800';
       label = 'Draft';
       break;
     default:
-      color = 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
+      color = 'bg-gray-100 text-gray-800';
       label = status;
   }
 
   return (
-    <Badge className={`${color} capitalize`} variant="outline">
+    <Badge className={`${color} capitalize`}>
       {label}
     </Badge>
-  );
-}
-
-// Empty state component
-function EmptyState({
-  title,
-  description,
-  action
-}: {
-  title: string;
-  description: string;
-  action?: React.ReactNode;
-}) {
-  return (
-    <div className="flex min-h-[200px] flex-col items-center justify-center rounded-md border border-dashed p-8 text-center">
-      <div className="mx-auto flex max-w-[420px] flex-col items-center justify-center text-center">
-        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-muted">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            stroke="currentColor"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="2"
-            className="h-10 w-10 text-muted-foreground"
-            viewBox="0 0 24 24"
-          >
-            <path d="M9 17H7A5 5 0 0 1 7 7h10a5 5 0 0 1 0 10h-2" />
-            <path d="m21 15-3-3-3 3M6 15l3-3 3 3" />
-          </svg>
-        </div>
-        <h3 className="mt-4 text-lg font-semibold">{title}</h3>
-        <p className="mt-2 text-sm text-muted-foreground">
-          {description}
-        </p>
-        {action && <div className="mt-4">{action}</div>}
-      </div>
-    </div>
   );
 }

@@ -1,64 +1,78 @@
-import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
-import ClientBody from "./ClientBody";
+import { Suspense } from "react";
+import type { Metadata } from "next";
+import { Inter as FontSans } from "next/font/google";
 import TenantInitializer from "@/components/tenant-initializer";
+import ClientBody from "./ClientBody";
+import { cn } from "@/lib/utils";
 
-const inter = Inter({
+// Font configuration
+const fontSans = FontSans({
   subsets: ["latin"],
-  display: "swap",
+  variable: "--font-sans",
 });
 
 export const metadata: Metadata = {
-  title: "BackendPro | Enterprise-Grade Backend as a Service",
+  title: {
+    default: "ApexBase - Enterprise-Grade Backend as a Service",
+    template: "%s | ApexBase",
+  },
   description:
-    "Secure, scalable backend infrastructure for modern applications. Authentication, database, storage, functions, and more in one unified platform.",
+    "ApexBase is an enterprise-grade Backend as a Service (BaaS) that provides scalable backend infrastructure for your applications.",
+  keywords: [
+    "baas",
+    "backend as a service",
+    "serverless",
+    "api",
+    "database",
+    "storage",
+    "authentication",
+    "enterprise",
+  ],
   authors: [
     {
-      name: "BackendPro",
+      name: "ApexBase",
+      url: "https://apexbase.com",
     },
   ],
-  creator: "BackendPro",
-  publisher: "BackendPro",
-  keywords: [
-    "backend as a service",
-    "BaaS",
-    "cloud backend",
-    "serverless",
-    "database",
-    "authentication",
-    "storage",
-    "functions",
-    "API",
-    "enterprise security",
-  ],
+  creator: "ApexBase",
   openGraph: {
-    title: "BackendPro | Enterprise-Grade Backend as a Service",
-    description:
-      "Secure, scalable backend infrastructure for modern applications. Authentication, database, storage, functions, and more in one unified platform.",
-    url: "https://backendpro.com",
-    siteName: "BackendPro",
-    locale: "en_US",
     type: "website",
+    locale: "en_US",
+    url: "https://apexbase.com",
+    title: "ApexBase - Enterprise-Grade Backend as a Service",
+    description: "ApexBase is an enterprise-grade Backend as a Service (BaaS).",
+    siteName: "ApexBase",
   },
   twitter: {
     card: "summary_large_image",
-    title: "BackendPro | Enterprise-Grade Backend as a Service",
-    description:
-      "Secure, scalable backend infrastructure for modern applications. Authentication, database, storage, functions, and more in one unified platform.",
-    creator: "@backendpro",
+    title: "ApexBase - Enterprise-Grade Backend as a Service",
+    description: "ApexBase is an enterprise-grade Backend as a Service (BaaS).",
+    creator: "@apexbase",
+  },
+  icons: {
+    icon: "/favicon.ico",
+    shortcut: "/favicon-16x16.png",
+    apple: "/apple-touch-icon.png",
   },
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
-    <html lang="en" className={inter.className}>
-      <body className="antialiased">
-        <TenantInitializer />
+    <html lang="en" suppressHydrationWarning>
+      <body
+        className={cn(
+          "min-h-screen bg-background font-sans antialiased",
+          fontSans.variable
+        )}
+      >
+        <Suspense fallback={<div>Loading...</div>}>
+          <TenantInitializer />
+        </Suspense>
         <ClientBody>{children}</ClientBody>
       </body>
     </html>
