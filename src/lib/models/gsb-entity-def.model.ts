@@ -4,6 +4,8 @@
 export interface GsbEntityDef {
   id: string;
   name: string;
+  title?: string;
+  description?: string;
   dbTableName?: string;
   securityLevel?: 'Authorized' | 'SuperSafe' | 'Public';
   properties?: GsbProperty[];
@@ -13,6 +15,14 @@ export interface GsbEntityDef {
   lastUpdateDate?: Date;
   createdBy_id?: string;
   lastUpdatedBy_id?: string;
+  permissions?: {
+    allowCreate?: boolean;
+    allowRead?: boolean;
+    allowUpdate?: boolean;
+    allowDelete?: boolean;
+    readRoles?: string[];
+    writeRoles?: string[];
+  };
 }
 
 /**

@@ -18,11 +18,15 @@ import ReactFlow, {
   NodeTypes,
   Node,
   useReactFlow,
+  useViewport,
+  ConnectionMode,
+  getBezierPath,
+  ReactFlowProvider,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -37,7 +41,13 @@ import {
   Plus,
   Trash2,
   Loader2,
-  CheckCircle
+  CheckCircle,
+  Square,
+  Cog,
+  User,
+  Clock,
+  GitBranch,
+  Split,
 } from 'lucide-react';
 import {
   Dialog,
@@ -49,56 +59,176 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
+import { Editor } from '@monaco-editor/react';
+import { GsbWorkflow, GsbActivity, GsbTransition, ActivityType, TransitionType } from '@/models/workflow';
+import { GsbWorkflowService } from '@/lib/services/workflow.service';
 
 // Import our custom components and utils
-import {
-  ActivityNode,
-  SystemNode,
-  StartNode,
-  EndNode,
-  TimerNode,
-  getActivityTypeName
-} from '@/components/workflow/activity-nodes';
-import { WorkflowService } from '@/lib/workflow-service';
-import { GsbWorkflowService } from '@/lib/services/gsb-workflow.service';
+import { getActivityTypeName } from '@/components/workflow/activity-nodes';
 import { workflowToReactFlow, reactFlowToWorkflow, generateId } from '@/lib/workflow-utils';
-import { ActivityType, GsbWorkflow } from '@/models/workflow';
 import { WorkflowMonitorService } from '@/lib/services/workflow-monitor.service';
 import { format } from 'date-fns';
 import { QueryParams } from '@/lib/gsb/types/query-params';
+import ActivityConfigPanel from '@/components/workflow/activity-config-panel';
+import ActivityNode from '@/components/workflow/activity-node';
+import TransitionConfigPanel from '@/components/workflow/transition-config-panel';
 
 // Define our node types
-const nodeTypes: NodeTypes = {
-  activityNode: ActivityNode,
-  systemNode: SystemNode,
-  startNode: StartNode,
-  endNode: EndNode,
-  timerNode: TimerNode,
+const nodeTypes = {
+  activity: ActivityNode,
 };
 
-export default function WorkflowDesigner() {
+const activityTypes = [
+  {
+    type: ActivityType.Start,
+    label: 'Start',
+    description: 'Initiates the workflow',
+    icon: <Play className="h-4 w-4" />,
+  },
+  {
+    type: ActivityType.End,
+    label: 'End',
+    description: 'Terminates the workflow',
+    icon: <Square className="h-4 w-4" />,
+  },
+  {
+    type: ActivityType.System,
+    label: 'System',
+    description: 'Executes system functions',
+    icon: <Cog className="h-4 w-4" />,
+  },
+  {
+    type: ActivityType.User,
+    label: 'User',
+    description: 'Requires user interaction',
+    icon: <User className="h-4 w-4" />,
+  },
+  {
+    type: ActivityType.Timer,
+    label: 'Timer',
+    description: 'Adds a timed delay',
+    icon: <Clock className="h-4 w-4" />,
+  },
+  {
+    type: ActivityType.MultiInnerWorkflow,
+    label: 'Sub-Workflow',
+    description: 'Executes a nested workflow',
+    icon: <GitBranch className="h-4 w-4" />,
+  },
+  {
+    type: ActivityType.AwaitParallel,
+    label: 'Parallel',
+    description: 'Executes activities in parallel',
+    icon: <Split className="h-4 w-4" />,
+  },
+];
+
+const defaultEdgeOptions = {
+  type: 'custom',
+  animated: true,
+  style: {
+    stroke: '#64748b',
+    strokeWidth: 2,
+  },
+  markerEnd: {
+    type: MarkerType.ArrowClosed,
+    width: 20,
+    height: 20,
+  },
+};
+
+function CustomEdge({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  style = {},
+  markerEnd,
+  data,
+}: any) {
+  const [edgePath] = getBezierPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetX,
+    targetY,
+    targetPosition,
+  });
+
+  const getEdgeStyle = () => {
+    const baseStyle = {
+      ...style,
+      strokeWidth: 2,
+    };
+
+    if (data?.type === TransitionType.Conditional) {
+      return {
+        ...baseStyle,
+        strokeDasharray: '5 5',
+      };
+    }
+
+    return baseStyle;
+  };
+
+  return (
+    <>
+      <path
+        id={id}
+        style={getEdgeStyle()}
+        className="react-flow__edge-path"
+        d={edgePath}
+        markerEnd={markerEnd}
+      />
+      {data?.label && (
+        <text>
+          <textPath
+            href={`#${id}`}
+            style={{ fontSize: 12 }}
+            startOffset="50%"
+            textAnchor="middle"
+            className="text-xs fill-muted-foreground"
+          >
+            {data.label}
+          </textPath>
+        </text>
+      )}
+    </>
+  );
+}
+
+const edgeTypes = {
+  custom: CustomEdge,
+};
+
+function WorkflowDesignerContent() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
+  const { toast } = useToast();
   const isNewWorkflow = id === 'new';
   const reactFlowInstance = useReactFlow();
+  const viewport = useViewport();
+  const workflowService = new GsbWorkflowService();
 
   const [workflow, setWorkflow] = useState<GsbWorkflow | null>(null);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
-  const [workflowName, setWorkflowName] = useState('Loading...');
+  const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
+  const [workflowName, setWorkflowName] = useState<string>('Loading...');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [isTestDialogOpen, setIsTestDialogOpen] = useState(false);
+  const [showTestDialog, setShowTestDialog] = useState(false);
   const [testData, setTestData] = useState('{}');
   const [isTestRunning, setIsTestRunning] = useState(false);
-  const { toast } = useToast();
   const [instances, setInstances] = useState<any[]>([]);
   const [isLoadingInstances, setIsLoadingInstances] = useState(false);
 
-  const workflowService = new GsbWorkflowService();
   const monitorService = new WorkflowMonitorService();
 
   // Load workflow data
@@ -108,22 +238,43 @@ export default function WorkflowDesigner() {
       setError(null);
 
       try {
-        const data = await workflowService.getWorkflowById(id as string);
-
-        if (data) {
-          setWorkflow(data);
-          setWorkflowName(data.name || 'New Workflow');
-
-          if (isNewWorkflow) {
-            // For new workflow, just set up empty nodes
-            setNodes([]);
-            setEdges([]);
-          } else {
-            // Convert existing workflow to React Flow format
-            const flowData = workflowToReactFlow(data);
-            setNodes(flowData.nodes);
-            setEdges(flowData.edges);
+        if (isNewWorkflow) {
+          // Load the new workflow from session storage
+          const newWorkflowStr = sessionStorage.getItem("newWorkflow");
+          if (!newWorkflowStr) {
+            router.replace("/dashboard/workflow");
+            return;
           }
+
+          const newWorkflow = JSON.parse(newWorkflowStr);
+          setWorkflow(newWorkflow);
+          setWorkflowName(newWorkflow.name);
+          
+          // Initialize with a start node
+          const startNode = {
+            id: generateId(),
+            type: 'activity',
+            position: { x: viewport.x + 250, y: viewport.y + 200 },
+            data: {
+              type: ActivityType.Start,
+              label: 'Start',
+              config: {}
+            }
+          };
+
+          setNodes([startNode]);
+          setEdges([]);
+          setIsLoading(false);
+          return;
+        }
+
+        const workflow = await workflowService.getWorkflowById(id);
+        if (workflow) {
+          const { nodes: flowNodes, edges: flowEdges } = workflowToReactFlow(workflow);
+          setNodes(flowNodes);
+          setEdges(flowEdges);
+          setWorkflow(workflow);
+          setWorkflowName(workflow.name || `Workflow ${id}`);
         } else {
           setError(`Workflow with ID ${id} not found`);
         }
@@ -166,42 +317,96 @@ export default function WorkflowDesigner() {
   // Handle node selection
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
     setSelectedNode(node);
+    setSelectedEdge(null);
+  }, []);
+
+  // Handle edge selection
+  const onEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
+    setSelectedEdge(edge);
+    setSelectedNode(null);
   }, []);
 
   // Handle node changes
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
       setNodes((nds) => applyNodeChanges(changes, nds));
-
-      // Update selected node if needed
-      const selectChange = changes.find(change => change.type === 'select');
-      if (selectChange && 'selected' in selectChange && !selectChange.selected) {
-        setSelectedNode(null);
-      }
     },
-    []
+    [setNodes]
   );
 
   // Handle edge changes
   const onEdgesChange = useCallback(
-    (changes: EdgeChange[]) => setEdges((eds) => applyEdgeChanges(changes, eds)),
-    []
+    (changes: EdgeChange[]) => {
+      setEdges((eds) => applyEdgeChanges(changes, eds));
+    },
+    [setEdges]
   );
 
-  // Handle new connections
+  const isValidConnection = useCallback(
+    (connection: Connection) => {
+      if (!connection.source || !connection.target) return false;
+
+      // Get source and target nodes
+      const sourceNode = nodes.find((node) => node.id === connection.source);
+      const targetNode = nodes.find((node) => node.id === connection.target);
+
+      if (!sourceNode || !targetNode) return false;
+
+      // Start nodes can't have incoming connections
+      if (targetNode.data.activityType === ActivityType.Start) return false;
+
+      // End nodes can't have outgoing connections
+      if (sourceNode.data.activityType === ActivityType.End) return false;
+
+      // Check if connection already exists
+      const connectionExists = edges.some(
+        (edge) =>
+          edge.source === connection.source && edge.target === connection.target
+      );
+
+      return !connectionExists;
+    },
+    [nodes, edges]
+  );
+
   const onConnect = useCallback(
-    (connection: Connection) => setEdges((eds) => addEdge({
-      ...connection,
-      id: `edge_${generateId()}`,
+    (connection: Connection) => {
+      if (!connection.source || !connection.target) return;
+
+      if (!isValidConnection(connection)) {
+        toast({
+          title: 'Invalid Connection',
+          description: 'This connection is not allowed',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const newEdge: Edge = {
+        id: generateId('edge'),
+        type: 'custom',
       animated: true,
+        source: connection.source,
+        target: connection.target,
+        sourceHandle: connection.sourceHandle || null,
+        targetHandle: connection.targetHandle || null,
+        style: {
+          stroke: '#64748b',
+          strokeWidth: 2,
+        },
       markerEnd: {
         type: MarkerType.ArrowClosed,
+          width: 20,
+          height: 20,
       },
       data: {
-        type: 1, // Standard transition type by default
-      }
-    }, eds)),
-    []
+          label: 'Transition',
+          type: TransitionType.Standard,
+        },
+      };
+      setEdges((eds) => addEdge(newEdge, eds));
+    },
+    [setEdges, isValidConnection, toast]
   );
 
   // Add new node
@@ -238,17 +443,24 @@ export default function WorkflowDesigner() {
         return node;
       })
     );
+  };
 
-    // Also update selected node if it's the one being modified
-    if (selectedNode && selectedNode.id === nodeId) {
-      setSelectedNode({
-        ...selectedNode,
+  // Update edge data
+  const updateEdgeData = (edgeId: string, newData: any) => {
+    setEdges((eds) =>
+      eds.map((edge) => {
+        if (edge.id === edgeId) {
+          return {
+            ...edge,
         data: {
-          ...selectedNode.data,
+              ...edge.data,
           ...newData,
         },
-      });
+          };
     }
+        return edge;
+      })
+    );
   };
 
   // Delete selected node
@@ -256,89 +468,195 @@ export default function WorkflowDesigner() {
     if (!selectedNode) return;
 
     setNodes((nds) => nds.filter((node) => node.id !== selectedNode.id));
-    setEdges((eds) => eds.filter(
-      (edge) => edge.source !== selectedNode.id && edge.target !== selectedNode.id
-    ));
+    setEdges((eds) =>
+      eds.filter(
+        (edge) =>
+          edge.source !== selectedNode.id && edge.target !== selectedNode.id
+      )
+    );
     setSelectedNode(null);
   };
 
-  // Save workflow
-  const saveWorkflow = async () => {
-    if (!workflow) return;
+  const deleteSelectedEdge = () => {
+    if (!selectedEdge) return;
 
+    setEdges((eds) => eds.filter((edge) => edge.id !== selectedEdge.id));
+    setSelectedEdge(null);
+  };
+
+  const onKeyDown = useCallback(
+    (event: KeyboardEvent) => {
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        if (selectedNode) {
+          deleteSelectedNode();
+        } else if (selectedEdge) {
+          deleteSelectedEdge();
+        }
+      }
+    },
+    [selectedNode, selectedEdge]
+  );
+
+  useEffect(() => {
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [onKeyDown]);
+
+  const validateWorkflow = () => {
+    // Check if workflow has a name
+    if (!workflowName) {
+      toast({
+        title: 'Validation Error',
+        description: 'Workflow must have a name',
+        variant: 'destructive',
+      });
+      return false;
+    }
+
+    // Check if workflow has at least one start and one end node
+    const startNodes = nodes.filter(
+      (node) => node.data.activityType === ActivityType.Start
+    );
+    const endNodes = nodes.filter(
+      (node) => node.data.activityType === ActivityType.End
+    );
+
+    if (startNodes.length === 0) {
+      toast({
+        title: 'Validation Error',
+        description: 'Workflow must have at least one Start activity',
+        variant: 'destructive',
+      });
+      return false;
+    }
+
+    if (endNodes.length === 0) {
+      toast({
+        title: 'Validation Error',
+        description: 'Workflow must have at least one End activity',
+        variant: 'destructive',
+      });
+      return false;
+    }
+
+    // Check if all activities are connected
+    const connectedNodes = new Set<string>();
+    const addConnectedNodes = (nodeId: string) => {
+      if (connectedNodes.has(nodeId)) return;
+      connectedNodes.add(nodeId);
+
+      // Add all nodes connected by outgoing edges
+      edges
+        .filter((edge) => edge.source === nodeId)
+        .forEach((edge) => addConnectedNodes(edge.target));
+
+      // Add all nodes connected by incoming edges
+      edges
+        .filter((edge) => edge.target === nodeId)
+        .forEach((edge) => addConnectedNodes(edge.source));
+    };
+
+    // Start from all start nodes
+    startNodes.forEach((node) => addConnectedNodes(node.id));
+
+    const disconnectedNodes = nodes.filter(
+      (node) => !connectedNodes.has(node.id)
+    );
+
+    if (disconnectedNodes.length > 0) {
+      toast({
+        title: 'Validation Error',
+        description: `Found ${disconnectedNodes.length} disconnected activities`,
+        variant: 'destructive',
+      });
+      return false;
+    }
+
+    // Check if all conditional transitions have at least one condition
+    const invalidTransitions = edges.filter(
+      (edge) =>
+        edge.data?.type === TransitionType.Conditional &&
+        (!edge.data.conditions || edge.data.conditions.length === 0)
+    );
+
+    if (invalidTransitions.length > 0) {
+      toast({
+        title: 'Validation Error',
+        description: `Found ${invalidTransitions.length} conditional transitions without conditions`,
+        variant: 'destructive',
+      });
+      return false;
+    }
+
+    return true;
+  };
+
+  const onSave = async () => {
     setIsSaving(true);
-    setSaveSuccess(false);
     setError(null);
+    setSaveSuccess(false);
 
     try {
-      // Convert React Flow data back to GSB workflow format
-      const updatedWorkflow = reactFlowToWorkflow(
-        nodes,
-        edges,
-        workflow.id,
-        workflowName
-      );
+      const updatedWorkflow: GsbWorkflow = {
+        ...workflow!,
+        name: workflowName,
+        activities: nodes.map(node => ({
+          id: node.id,
+          name: node.data.label,
+          activityType: node.data.type,
+          position: node.position,
+        })),
+        transitions: edges.map(edge => ({
+          id: edge.id,
+          name: edge.data?.label || '',
+          from_id: edge.source,
+          to_id: edge.target,
+          type: edge.data?.type || TransitionType.Standard,
+        })),
+      };
 
-      // Save workflow
-      const savedWorkflow = await workflowService.saveWorkflow(updatedWorkflow);
-      setWorkflow(savedWorkflow);
-
-      // If new workflow, update URL
-      if (isNewWorkflow) {
-        router.push(`/dashboard/workflow/designer/${savedWorkflow.id}`);
-      }
-
+      await workflowService.saveWorkflow(updatedWorkflow);
       setSaveSuccess(true);
-
-      // Reset success message after 3 seconds
-      setTimeout(() => {
-        setSaveSuccess(false);
-      }, 3000);
+      toast({
+        title: "Success",
+        description: "Workflow saved successfully",
+      });
     } catch (err) {
-      console.error('Error saving workflow:', err);
       setError('Failed to save workflow');
+      toast({
+        title: "Error",
+        description: "Failed to save workflow",
+        variant: "destructive",
+      });
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Start workflow test
-  const startWorkflowTest = async () => {
-    if (!workflow) return;
-
+  const onTest = async () => {
     setIsTestRunning(true);
-    try {
-      let data = {};
-      try {
-        data = JSON.parse(testData);
-      } catch (err) {
-        toast({
-          title: "Invalid JSON",
-          description: "Please enter valid JSON data",
-          variant: "destructive",
-        });
-        return;
-      }
+    setError(null);
 
-      await workflowService.startWorkflow(workflow.id, data);
-      
-      toast({
-        title: "Workflow Started",
-        description: "The workflow test has been initiated successfully.",
-      });
-      
-      setIsTestDialogOpen(false);
-      // Reload instances after starting a test
-      loadInstances();
+    try {
+      const result = await workflowService.testWorkflow(workflow as GsbWorkflow, JSON.parse(testData));
+      setInstances([{
+        id: generateId(),
+        visitedNodes: result.visitedNodes,
+        visitedEdges: result.visitedEdges,
+        timestamp: new Date(),
+      }, ...instances]);
     } catch (err) {
-      console.error('Error starting workflow:', err);
+      setError('Failed to test workflow');
       toast({
         title: "Error",
-        description: "Failed to start workflow test",
+        description: "Failed to test workflow",
         variant: "destructive",
       });
     } finally {
       setIsTestRunning(false);
+      setShowTestDialog(false);
     }
   };
 
@@ -385,29 +703,28 @@ export default function WorkflowDesigner() {
             <Button
               variant="outline"
               size="sm"
-              onClick={saveWorkflow}
-              disabled={isLoading || isSaving}
+              onClick={() => setShowTestDialog(true)}
+              disabled={isSaving || isTestRunning}
             >
-              {isSaving ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                  Saving...
-                </>
+              {isTestRunning ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-1" />
               ) : (
-                <>
-                  <Save className="h-4 w-4 mr-1" />
-                  Save
-                </>
+                <Play className="h-4 w-4 mr-1" />
               )}
+              Test
             </Button>
             <Button
-              variant="default"
+              variant="outline"
               size="sm"
-              onClick={() => setIsTestDialogOpen(true)}
-              disabled={isLoading || isSaving || isNewWorkflow}
+              onClick={onSave}
+              disabled={isSaving || isTestRunning}
             >
-              <Play className="h-4 w-4 mr-1" />
-              Test
+              {isSaving ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-1" />
+              ) : (
+                <Save className="h-4 w-4 mr-1" />
+              )}
+              Save
             </Button>
           </div>
         </div>
@@ -432,72 +749,87 @@ export default function WorkflowDesigner() {
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 onConnect={onConnect}
-                onNodeClick={onNodeClick}
-                nodeTypes={nodeTypes}
-                fitView
-                minZoom={0.2}
-                maxZoom={2}
-                defaultEdgeOptions={{
-                  animated: true,
-                  markerEnd: {
-                    type: MarkerType.ArrowClosed,
-                  },
+                onNodeClick={(_, node) => {
+                  setSelectedNode(node);
+                  setSelectedEdge(null);
                 }}
+                onEdgeClick={(_, edge) => {
+                  setSelectedEdge(edge);
+                  setSelectedNode(null);
+                }}
+                onPaneClick={() => {
+                  setSelectedNode(null);
+                  setSelectedEdge(null);
+                }}
+                nodeTypes={nodeTypes}
+                edgeTypes={edgeTypes}
+                defaultEdgeOptions={defaultEdgeOptions}
+                connectionMode={ConnectionMode.Loose}
+                deleteKeyCode={null}
+                fitView
+                className="bg-muted/10"
               >
-                <Background />
                 <Controls />
-                <MiniMap />
+                <Background />
+                <MiniMap
+                  nodeColor={(node) => {
+                    switch (node.data.activityType) {
+                      case ActivityType.Start:
+                        return '#86efac'; // green-300
+                      case ActivityType.End:
+                        return '#fca5a5'; // red-300
+                      case ActivityType.System:
+                        return '#93c5fd'; // blue-300
+                      case ActivityType.User:
+                        return '#d8b4fe'; // purple-300
+                      case ActivityType.Timer:
+                        return '#fdba74'; // orange-300
+                      case ActivityType.MultiInnerWorkflow:
+                        return '#a5b4fc'; // indigo-300
+                      case ActivityType.AwaitParallel:
+                        return '#67e8f9'; // cyan-300
+                      default:
+                        return '#e5e7eb'; // gray-200
+                    }
+                  }}
+                  nodeStrokeWidth={3}
+                  maskColor="rgb(0, 0, 0, 0.1)"
+                />
 
-                {/* Node palette */}
+                {/* Activity palette */}
                 <Panel position="top-left" className="bg-background shadow-md rounded-md p-3 m-3">
                   <div className="flex flex-col gap-2">
                     <h3 className="font-medium text-sm mb-1">Add Activities</h3>
                     <div className="flex flex-wrap gap-2">
+                      {activityTypes.map((activity) => (
                       <Button
+                          key={activity.type}
                         variant="outline"
                         size="sm"
                         className="text-xs"
-                        onClick={() => addNode('startNode', ActivityType.Start)}
-                      >
-                        <Plus className="h-3 w-3 mr-1" />
-                        Start
+                          onClick={() => {
+                            const position = {
+                              x: viewport.x + window.innerWidth / (2 * viewport.zoom),
+                              y: viewport.y + window.innerHeight / (2 * viewport.zoom),
+                            };
+                            
+                            const newNode = {
+                              id: generateId('node'),
+                              type: 'activity',
+                              position,
+                              data: {
+                                label: `${activity.label} ${nodes.length + 1}`,
+                                activityType: activity.type,
+                              },
+                            };
+                            
+                            setNodes((nds) => [...nds, newNode]);
+                          }}
+                        >
+                          {activity.icon}
+                          <span className="ml-1">{activity.label}</span>
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-xs"
-                        onClick={() => addNode('activityNode', ActivityType.User)}
-                      >
-                        <Plus className="h-3 w-3 mr-1" />
-                        User
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-xs"
-                        onClick={() => addNode('systemNode', ActivityType.System)}
-                      >
-                        <Plus className="h-3 w-3 mr-1" />
-                        System
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-xs"
-                        onClick={() => addNode('timerNode', ActivityType.Timer)}
-                      >
-                        <Plus className="h-3 w-3 mr-1" />
-                        Timer
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-xs"
-                        onClick={() => addNode('endNode', ActivityType.End)}
-                      >
-                        <Plus className="h-3 w-3 mr-1" />
-                        End
-                      </Button>
+                      ))}
                     </div>
                   </div>
                 </Panel>
@@ -508,14 +840,10 @@ export default function WorkflowDesigner() {
             <div className="w-96 border-l overflow-hidden flex flex-col">
               <Tabs defaultValue="properties" className="flex-1 flex flex-col">
                 <div className="border-b px-4 py-2">
-                  <TabsList className="grid grid-cols-3 w-full">
+                  <TabsList className="grid grid-cols-2 w-full">
                     <TabsTrigger value="properties">
                       <Settings className="h-4 w-4 mr-1" />
                       Properties
-                    </TabsTrigger>
-                    <TabsTrigger value="functions">
-                      <Settings className="h-4 w-4 mr-1" />
-                      Functions
                     </TabsTrigger>
                     <TabsTrigger value="logs">
                       <History className="h-4 w-4 mr-1" />
@@ -526,134 +854,21 @@ export default function WorkflowDesigner() {
 
                 <TabsContent value="properties" className="flex-1 overflow-auto">
                   {selectedNode ? (
-                    <div className="p-4 space-y-4">
-                      <div className="flex justify-between items-center">
-                        <h3 className="text-lg font-medium">{selectedNode.data.label || 'Node'}</h3>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={deleteSelectedNode}
-                          disabled={isSaving}
-                        >
-                          <Trash2 className="h-4 w-4 mr-1" />
-                          Delete
-                        </Button>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="node-name">Name</Label>
-                        <Input
-                          id="node-name"
-                          value={selectedNode.data.label || ''}
-                          onChange={(e) => updateNodeData(selectedNode.id, { label: e.target.value })}
-                          disabled={isSaving}
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Activity Type</Label>
-                        <div className="bg-muted p-2 rounded text-sm">
-                          {getActivityTypeName(selectedNode.data.activityType)}
-                        </div>
-                      </div>
-
-                      {selectedNode.data.activityType === ActivityType.User && (
-                        <>
-                          <div className="space-y-2">
-                            <Label htmlFor="form">Form</Label>
-                            <Input
-                              id="form"
-                              placeholder="Select a form..."
-                              value={selectedNode.data.form_id || ''}
-                              onChange={(e) => updateNodeData(selectedNode.id, { form_id: e.target.value })}
-                              disabled={isSaving}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="role">Role</Label>
-                            <Input
-                              id="role"
-                              placeholder="Select a role..."
-                              value={selectedNode.data.role_id || ''}
-                              onChange={(e) => updateNodeData(selectedNode.id, { role_id: e.target.value })}
-                              disabled={isSaving}
-                            />
-                          </div>
-                        </>
-                      )}
-
-                      {selectedNode.data.activityType === ActivityType.Timer && (
-                        <div className="space-y-2">
-                          <Label htmlFor="duration">Duration (minutes)</Label>
-                          <Input
-                            id="duration"
-                            type="number"
-                            placeholder="0"
-                            value={selectedNode.data.pauseDuration || ''}
-                            onChange={(e) => updateNodeData(selectedNode.id, {
-                              pauseDuration: parseInt(e.target.value) || 0
-                            })}
-                            disabled={isSaving}
-                          />
-                        </div>
-                      )}
-
-                      {/* Functions list for activities that can have them */}
-                      {(selectedNode.data.activityType === ActivityType.System ||
-                        selectedNode.data.activityType === ActivityType.User) && (
-                        <div className="space-y-2">
-                          <Label>Activity Functions</Label>
-                          <div className="border rounded-md p-2">
-                            {selectedNode.data.functions && selectedNode.data.functions.length > 0 ? (
-                              <div className="space-y-2">
-                                {selectedNode.data.functions.map((fn: any, index: number) => (
-                                  <div
-                                    key={fn.id || index}
-                                    className="bg-muted p-2 rounded-md text-sm flex justify-between items-center"
-                                  >
-                                    <span>{fn.name}</span>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-6 w-6 p-0"
-                                      onClick={() => {
-                                        const functions = [...(selectedNode.data.functions || [])];
-                                        functions.splice(index, 1);
-                                        updateNodeData(selectedNode.id, { functions });
-                                      }}
-                                      disabled={isSaving}
-                                    >
-                                      <Trash2 className="h-3 w-3" />
-                                    </Button>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="text-sm text-muted-foreground text-center py-4">
-                                No functions defined
-                              </div>
-                            )}
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="w-full mt-2"
-                              onClick={() => {
-                                const functions = [...(selectedNode.data.functions || [])];
-                                functions.push({
-                                  id: generateId('fn'),
-                                  name: `New Function ${functions.length + 1}`
-                                });
-                                updateNodeData(selectedNode.id, { functions });
-                              }}
-                              disabled={isSaving}
-                            >
-                              <Plus className="h-3 w-3 mr-1" />
-                              Add Function
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                    <ActivityConfigPanel
+                      activity={selectedNode}
+                      onUpdate={(data) => updateNodeData(selectedNode.id, data)}
+                      onClose={() => {
+                        deleteSelectedNode();
+                      }}
+                    />
+                  ) : selectedEdge ? (
+                    <TransitionConfigPanel
+                      transition={selectedEdge}
+                      onUpdate={(data) => updateEdgeData(selectedEdge.id, data)}
+                      onClose={() => {
+                        deleteSelectedEdge();
+                      }}
+                    />
                   ) : (
                     <div className="h-full flex items-center justify-center p-4 text-center">
                       <div>
@@ -665,23 +880,6 @@ export default function WorkflowDesigner() {
                       </div>
                     </div>
                   )}
-                </TabsContent>
-
-                <TabsContent value="functions" className="flex-1 overflow-auto p-4">
-                  <Card>
-                    <CardContent className="p-4">
-                      <h3 className="text-lg font-medium mb-4">Workflow Functions</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Configure global functions that can be used in activity transitions and operations.
-                      </p>
-                      <div className="mt-4">
-                        <Button variant="outline" className="w-full" disabled={isSaving}>
-                          <Plus className="h-4 w-4 mr-1" />
-                          Add Global Function
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
                 </TabsContent>
 
                 <TabsContent value="logs" className="flex-1 overflow-auto p-4">
@@ -717,7 +915,7 @@ export default function WorkflowDesigner() {
                           <History className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
                           <p className="text-sm text-muted-foreground">No instances found</p>
                         </div>
-                      ) : (
+                      ) :
                         <div className="space-y-4">
                           {instances.map((instance: any) => (
                             <Card key={instance.id} className="p-4">
@@ -755,7 +953,7 @@ export default function WorkflowDesigner() {
                             </Card>
                           ))}
                         </div>
-                      )}
+                      }
                     </CardContent>
                   </Card>
                 </TabsContent>
@@ -766,53 +964,60 @@ export default function WorkflowDesigner() {
       </div>
 
       {/* Test Dialog */}
-      <Dialog open={isTestDialogOpen} onOpenChange={setIsTestDialogOpen}>
-        <DialogContent>
+      <Dialog open={showTestDialog} onOpenChange={setShowTestDialog}>
+        <DialogContent className="max-w-4xl h-[80vh]">
           <DialogHeader>
             <DialogTitle>Test Workflow</DialogTitle>
             <DialogDescription>
-              Enter test data in JSON format to start a new workflow instance.
+              Enter test data in JSON format to simulate workflow execution.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+
+          <div className="flex flex-col gap-4 flex-1">
             <div className="space-y-2">
-              <Label>Input Data (JSON)</Label>
-              <Textarea
-                placeholder="{}"
+              <Label htmlFor="testData">Test Data (JSON)</Label>
+              <div className="flex-1 min-h-[400px] border rounded-md overflow-hidden">
+                <Editor
+                  height="100%"
+                  defaultLanguage="json"
                 value={testData}
-                onChange={(e) => setTestData(e.target.value)}
-                className="font-mono"
-                rows={10}
+                  onChange={(value) => setTestData(value || '{}')}
+                  options={{
+                    minimap: { enabled: false },
+                    fontSize: 14,
+                    lineNumbers: 'on',
+                    scrollBeyondLastLine: false,
+                    automaticLayout: true,
+                    tabSize: 2,
+                  }}
               />
             </div>
           </div>
+          </div>
+
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsTestDialogOpen(false)}
-              disabled={isTestRunning}
-            >
+            <Button variant="outline" onClick={() => setShowTestDialog(false)}>
               Cancel
             </Button>
-            <Button
-              onClick={startWorkflowTest}
-              disabled={isTestRunning}
-            >
+            <Button onClick={onTest} disabled={isTestRunning}>
               {isTestRunning ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                  Starting...
-                </>
+                <Loader2 className="h-4 w-4 animate-spin mr-1" />
               ) : (
-                <>
                   <Play className="h-4 w-4 mr-1" />
-                  Start Test
-                </>
               )}
+              Run Test
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function WorkflowDesigner() {
+  return (
+    <ReactFlowProvider>
+      <WorkflowDesignerContent />
+    </ReactFlowProvider>
   );
 }

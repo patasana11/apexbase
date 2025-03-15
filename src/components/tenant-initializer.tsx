@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { setupTenant } from '@/lib/config/tenant-config';
+import { AppInitializerService } from '@/lib/services/app-initializer.service';
 
 /**
  * TenantInitializer component
  *
- * This component handles tenant initialization on app startup.
- * It sets up the correct tenant based on the hostname and stores
- * the current tenant in localStorage.
+ * This component handles app and tenant initialization on startup.
+ * In development mode, it sets up the test token and tenant code.
+ * In production, it sets up the tenant based on the hostname.
  */
 export default function TenantInitializer() {
   const pathname = usePathname();
@@ -19,12 +19,14 @@ export default function TenantInitializer() {
     if (typeof window === 'undefined' || initialized) return;
 
     try {
-      const hostname = window.location.hostname;
-      const tenant = setupTenant(hostname);
-      console.log(`Initialized tenant: ${tenant}`);
+      // Initialize the app with the AppInitializerService
+      const appInitializer = AppInitializerService.getInstance();
+      appInitializer.initialize();
+      
+      console.log('App initialization completed');
       setInitialized(true);
     } catch (error) {
-      console.error('Error initializing tenant:', error);
+      console.error('Error during initialization:', error);
     }
   }, [pathname, initialized]);
 

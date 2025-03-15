@@ -55,12 +55,14 @@ import { GsbEntityDef } from "@/lib/models/gsb-entity-def.model";
 import { EntityDefService } from "@/lib/services/entity-def.service";
 import { setGsbToken, setGsbTenantCode } from "@/lib/config/gsb-config";
 import ClientOnly from "@/components/client-only";
+import { useRouter } from "next/navigation";
+import { createClientComponent } from "@/components/dynamic-component";
 
 // Constants
 const GSB_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiJiZjE1MjRiNy04MjBmLTQ2NGYtOWYzNC02ZWQ2Y2Q5NjVlNjEiLCJ0YyI6ImRldjEiLCJpIjoiOThCNUU0OUQiLCJleHAiOjE3NDMwMDcwMzQsImlzcyI6IkBnc2IifQ.0WImy6Y1XmC0RwJPG-Y3teTlAA4wL17rgDYARyySciQ";
 const GSB_TENANT = "dev1";
 
-export default function DatabasePage() {
+function DatabasePageContent() {
   const [searchQuery, setSearchQuery] = useState("");
   const [entityDefs, setEntityDefs] = useState<GsbEntityDef[]>([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -70,6 +72,7 @@ export default function DatabasePage() {
   const [isClient, setIsClient] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<string | null>(null);
+  const router = useRouter();
 
   // Mark when component is mounted on client
   useEffect(() => {
@@ -84,6 +87,10 @@ export default function DatabasePage() {
     console.log("Setting up GSB token and tenant code...");
 
     try {
+      // Set the GSB token and tenant code for the service to use
+      setGsbToken(GSB_TOKEN);
+      setGsbTenantCode(GSB_TENANT);
+
       // Parse JWT token to confirm it's valid
       const tokenParts = GSB_TOKEN.split('.');
       if (tokenParts.length === 3) {
@@ -93,15 +100,14 @@ export default function DatabasePage() {
       } else {
         console.error("Invalid token format, doesn't have 3 parts");
         setDebugInfo("Invalid token format");
+        setError("Invalid token format");
       }
     } catch (error) {
-      console.error("Error parsing token:", error);
-      setDebugInfo(`Error parsing token: ${error}`);
+      console.error("Error setting up GSB token:", error);
+      setDebugInfo(`Error setting up GSB token: ${error}`);
+      setError(`Failed to initialize: ${error instanceof Error ? error.message : String(error)}`);
+      return;
     }
-
-    // Set the GSB token and tenant code for the service to use
-    setGsbToken(GSB_TOKEN);
-    setGsbTenantCode(GSB_TENANT);
 
     // Initial data fetch
     console.log("Running initial data fetch...");
@@ -123,6 +129,11 @@ export default function DatabasePage() {
     setError(null);
 
     try {
+      // Check if token is set before making the request
+      if (!GSB_TOKEN) {
+        throw new Error("GSB Token not available");
+      }
+
       console.log(`Fetching entity definitions - page: ${page}, search: ${search}`);
 
       const entityDefService = new EntityDefService();
@@ -138,14 +149,18 @@ export default function DatabasePage() {
         result = await entityDefService.getEntityDefs(page, pageSize);
       }
 
-      console.log(`Fetched ${result.entityDefs.length} entity definitions. Total: ${result.totalCount}`);
+      if (!result) {
+        throw new Error("No data received from server");
+      }
 
-      if (result.entityDefs.length > 0) {
+      console.log(`Fetched ${result.entityDefs?.length || 0} entity definitions. Total: ${result.totalCount}`);
+
+      if (result.entityDefs?.length > 0) {
         console.log("Sample entity def:", result.entityDefs[0]);
       }
 
-      setEntityDefs(result.entityDefs);
-      setTotalCount(result.totalCount);
+      setEntityDefs(result.entityDefs || []);
+      setTotalCount(result.totalCount || 0);
     } catch (error) {
       console.error("Error fetching entity definitions:", error);
       setError(`Failed to fetch data: ${error instanceof Error ? error.message : String(error)}`);
@@ -244,7 +259,7 @@ export default function DatabasePage() {
               <FiSearch className="mr-2 h-4 w-4" />
               Search
             </Button>
-            <Button>
+            <Button onClick={() => router.push('/dashboard/database/new')}>
               <FiPlus className="mr-2 h-4 w-4" />
               New Table
             </Button>
@@ -481,7 +496,7 @@ export default function DatabasePage() {
               </CardHeader>
               <CardContent>
                 <div className="flex flex-col gap-2">
-                  <Button variant="outline" className="justify-start">
+                  <Button variant="outline" className="justify-start" onClick={() => router.push('/dashboard/database/new')}>
                     <FiPlus className="mr-2 h-4 w-4" />
                     Create New Table
                   </Button>
@@ -572,3 +587,6 @@ export default function DatabasePage() {
     </div>
   );
 }
+
+// Export the wrapped version
+export default createClientComponent(DatabasePageContent);
