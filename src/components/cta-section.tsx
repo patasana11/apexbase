@@ -24,7 +24,7 @@ export function CTASection() {
               className="bg-white text-blue-600 hover:bg-blue-50"
               asChild
             >
-              <Link href="/register" className="gap-1">
+              <Link href="/registration" className="gap-1">
                 Start Building for Free
                 <FiArrowRight className="ml-1 h-4 w-4" />
               </Link>

@@ -1,18 +1,72 @@
 'use client';
 
 import { useState } from 'react';
-import { SocialProvider } from '@/lib/services/registration.service';
+import { AuthService } from '@/lib/services/auth.service';
+
+export enum SocialProvider {
+  Google = 'google',
+  Github = 'github',
+  Facebook = 'facebook',
+  Apple = 'apple'
+}
 
 interface SocialLoginButtonsProps {
   onLogin?: (provider: SocialProvider, token: string) => void;
   isSignUp?: boolean;
+  tenantCode?: string;
+  remember?: boolean;
 }
 
 export default function SocialLoginButtons({
   onLogin,
-  isSignUp = false
+  isSignUp = false,
+  tenantCode = process.env.NEXT_PUBLIC_DEFAULT_TENANT_CODE || 'dev1',
+  remember = false
 }: SocialLoginButtonsProps) {
   const [isLoading, setIsLoading] = useState<SocialProvider | null>(null);
+  const authService = new AuthService();
+
+  const handleSocialAuth = async (provider: SocialProvider, token: string) => {
+    if (onLogin) {
+      onLogin(provider, token);
+    } else {
+      try {
+        // Handle the social login directly if no callback is provided
+        const loginData: any = {
+          email: '', // This would typically come from the social provider
+          tenantCode,
+          remember
+        };
+
+        // Add the appropriate token based on the provider
+        switch (provider) {
+          case SocialProvider.Google:
+            loginData.googleToken = token;
+            break;
+          case SocialProvider.Facebook:
+            loginData.facebookToken = token;
+            break;
+          case SocialProvider.Apple:
+            loginData.appleToken = token;
+            break;
+          default:
+            // For other providers like GitHub, we might need a different approach
+            break;
+        }
+
+        const response = await authService.login(loginData);
+        
+        if (!response.success) {
+          throw new Error(response.error || 'Social authentication failed');
+        }
+
+        // Redirect or handle successful login
+        window.location.href = '/dashboard';
+      } catch (error) {
+        console.error(`${provider} login error:`, error);
+      }
+    }
+  };
 
   const handleGoogleLogin = async () => {
     setIsLoading(SocialProvider.Google);

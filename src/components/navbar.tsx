@@ -127,7 +127,7 @@ export function Navbar() {
               <Link href="/login">Sign In</Link>
             </Button>
             <Button asChild>
-              <Link href="/register">Get Started</Link>
+              <Link href="/registration">Get Started</Link>
             </Button>
           </div>
           <Sheet>
@@ -200,7 +200,7 @@ export function Navbar() {
                     <Link href="/login">Sign In</Link>
                   </Button>
                   <Button className="justify-start" asChild>
-                    <Link href="/register">Get Started</Link>
+                    <Link href="/registration">Get Started</Link>
                   </Button>
                 </div>
               </div>

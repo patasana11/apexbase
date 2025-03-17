@@ -31,10 +31,6 @@ const nextConfig = {
   },
   // Other options
   reactStrictMode: true,
-  // Disable the dev overlay that's causing the useLayoutEffect warning
-  devIndicators: {
-    buildActivity: false,
-  },
 };
 
 module.exports = nextConfig;

@@ -30,7 +30,7 @@ export function HeroSection() {
 
           <div className="mb-12 flex flex-col gap-4 sm:flex-row sm:gap-4">
             <Button size="lg" asChild>
-              <Link href="/register" className="gap-1">
+              <Link href="/registration" className="gap-1">
                 Start Building
                 <FiArrowRight className="ml-1 h-4 w-4" />
               </Link>

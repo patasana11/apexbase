@@ -1,199 +1,218 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { FiGithub, FiUser, FiLock, FiAlertCircle } from "react-icons/fi";
-import { FcGoogle } from "react-icons/fc";
+import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
-import * as z from "zod";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-
-const loginSchema = z.object({
-  email: z.string().email("Please enter a valid email address"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
-});
-
-type LoginFormValues = z.infer<typeof loginSchema>;
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Icons } from "@/components/icons";
+import { AuthService } from "@/lib/services/auth.service";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const form = useForm<LoginFormValues>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-    },
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    remember: false,
+    tenantCode: process.env.NEXT_PUBLIC_DEFAULT_TENANT_CODE || 'dev1',
   });
 
-  async function onSubmit(values: LoginFormValues) {
+  const authService = new AuthService();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     setIsLoading(true);
     setError(null);
 
-    // Simulate API request
     try {
-      // Replace with actual API call to your backend
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Authenticate with GSB
+      const authResponse = await authService.login({
+        email: formData.email,
+        password: formData.password,
+        tenantCode: formData.tenantCode,
+        remember: formData.remember,
+      });
 
-      // For demo purposes, let's redirect to dashboard
-      window.location.href = "/dashboard";
+      if (!authResponse.success) {
+        throw new Error(authResponse.error || 'Authentication failed');
+      }
+
+      // Then, authenticate with NextAuth
+      const result = await signIn('credentials', {
+        email: formData.email,
+        password: formData.password,
+        remember: formData.remember,
+        redirect: false,
+      });
+
+      if (result?.error) {
+        throw new Error(result.error);
+      }
+
+      // Redirect to dashboard on success
+      router.push('/dashboard');
     } catch (error) {
-      setError("Invalid email or password. Please try again.");
+      console.error('Login error:', error);
+      setError(error instanceof Error ? error.message : 'Login failed');
     } finally {
       setIsLoading(false);
     }
-  }
+  };
+
+  const handleSocialLogin = async (provider: string) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const result = await signIn(provider, {
+        redirect: false,
+        callbackUrl: '/dashboard',
+      });
+
+      if (result?.error) {
+        throw new Error(result.error);
+      }
+
+      if (result?.url) {
+        router.push(result.url);
+      }
+    } catch (error) {
+      console.error('Social login error:', error);
+      setError(error instanceof Error ? error.message : 'Social login failed');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle social auth callback
+  const handleSocialAuthCallback = async (provider: string, token: string) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Authenticate with GSB using the social token
+      const authResponse = await authService.login({
+        email: formData.email, // This might be populated from the social provider
+        tenantCode: formData.tenantCode,
+        remember: formData.remember,
+        ...(provider === 'google' && { googleToken: token }),
+        ...(provider === 'facebook' && { facebookToken: token }),
+        ...(provider === 'apple' && { appleToken: token }),
+      });
+
+      if (!authResponse.success) {
+        throw new Error(authResponse.error || 'Social authentication failed');
+      }
+
+      // Redirect to dashboard on success
+      router.push('/dashboard');
+    } catch (error) {
+      console.error('Social auth callback error:', error);
+      setError(error instanceof Error ? error.message : 'Social authentication failed');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
-    <>
-      <div className="flex flex-col space-y-2 text-center">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Welcome back
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Enter your email to sign in to your account
-        </p>
-      </div>
-
-      <Card>
-        <CardContent className="pt-4">
+    <Card className="w-full">
+      <CardHeader>
+        <CardTitle>Welcome Back</CardTitle>
+        <CardDescription>
+          Sign in to your account to continue
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <Alert variant="destructive" className="mb-4">
-              <FiAlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
+            <div className="rounded-md bg-red-50 p-4">
+              <p className="text-sm text-red-800">{error}</p>
+            </div>
           )}
+          
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="name@example.com"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              required
+              disabled={isLoading}
+            />
+          </div>
 
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <FiUser className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          placeholder="name@example.com"
-                          className="pl-10"
-                          {...field}
-                          disabled={isLoading}
-                        />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <div className="flex items-center justify-between">
-                      <FormLabel>Password</FormLabel>
-                      <Link
-                        href="/forgot-password"
-                        className="text-xs text-muted-foreground hover:text-primary"
-                      >
-                        Forgot password?
-                      </Link>
-                    </div>
-                    <FormControl>
-                      <div className="relative">
-                        <FiLock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          type="password"
-                          placeholder="••••••••"
-                          className="pl-10"
-                          {...field}
-                          disabled={isLoading}
-                        />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <Button
-                type="submit"
-                className="w-full"
+          <div className="space-y-2">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              value={formData.password}
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              required
+              disabled={isLoading}
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="remember"
+                checked={formData.remember}
+                onCheckedChange={(checked) => 
+                  setFormData({ ...formData, remember: checked === true })
+                }
                 disabled={isLoading}
-              >
-                {isLoading ? "Signing in..." : "Sign In"}
-              </Button>
-            </form>
-          </Form>
-
-          <div className="mt-4">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <Separator />
-              </div>
-              <div className="relative flex justify-center text-xs">
-                <span className="bg-card px-2 text-muted-foreground">
-                  Or continue with
-                </span>
-              </div>
+              />
+              <Label htmlFor="remember" className="text-sm">Remember me</Label>
             </div>
+            <Button variant="link" className="px-0 font-normal" disabled={isLoading}>
+              Forgot password?
+            </Button>
+          </div>
 
-            <div className="mt-4 flex gap-2">
-              <Button
-                variant="outline"
-                className="w-full"
-                type="button"
-                disabled={isLoading}
-              >
-                <FcGoogle className="mr-2 h-4 w-4" />
-                Google
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full"
-                type="button"
-                disabled={isLoading}
-              >
-                <FiGithub className="mr-2 h-4 w-4" />
-                GitHub
-              </Button>
+          <Button type="submit" className="w-full" disabled={isLoading}>
+            {isLoading && <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />}
+            Sign In
+          </Button>
+
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="bg-background px-2 text-muted-foreground">
+                Or continue with
+              </span>
             </div>
           </div>
-        </CardContent>
-        <CardFooter className="flex justify-center border-t p-4">
-          <div className="text-sm text-muted-foreground">
-            Don't have an account?{" "}
-            <Link
-              href="/register"
-              className="font-medium text-primary hover:underline"
+
+          <div className="grid grid-cols-2 gap-4">
+            <Button
+              variant="outline"
+              onClick={() => handleSocialLogin('google')}
+              disabled={isLoading}
             >
-              Sign up
-            </Link>
+              <Icons.google className="mr-2 h-4 w-4" />
+              Google
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => handleSocialLogin('github')}
+              disabled={isLoading}
+            >
+              <Icons.gitHub className="mr-2 h-4 w-4" />
+              GitHub
+            </Button>
           </div>
-        </CardFooter>
-      </Card>
-    </>
+        </form>
+      </CardContent>
+    </Card>
   );
 }
