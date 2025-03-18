@@ -19,35 +19,74 @@ ApexBase is a comprehensive Backend-as-a-Service (BaaS) platform that provides a
 
 ## Getting Started
 
+### Prerequisites
+
+- Node.js 18+
+- npm or Bun (recommended)
+- PostgreSQL (optional for local development)
+
+### Setup Instructions
+
 1. Clone the repository:
    ```bash
    git clone https://github.com/yourusername/apexbase.git
+   cd apexbase
    ```
 
 2. Install dependencies:
    ```bash
+   # Using npm
    npm install
-   # or
-   yarn install
-   # or
-   pnpm install
+
+   # Using Bun (recommended)
+   bun install
    ```
 
-3. Set up environment variables:
+3. Environment Setup:
    ```bash
-   cp .env.example .env.local
+   # Copy the example environment file
+   cp .env.example .env
+
+   # Edit the .env file with your configuration
+   # For development, most variables can use placeholder values
    ```
 
 4. Run the development server:
    ```bash
+   # Using npm
    npm run dev
-   # or
-   yarn dev
-   # or
-   pnpm dev
+
+   # Using Bun (recommended)
+   bun run dev
    ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+5. Open [http://localhost:3000](http://localhost:3000) with your browser to see the application.
+
+### Development Mode
+
+When running in development mode:
+
+- Authentication is simulated - you can login with any credentials
+- The GSB API endpoints use local mocks when possible
+- You can access all features without actual backend connections
+
+### Environment Variables
+
+The application requires several environment variables to be set. See `.env.example` for a full list with descriptions. Key variables include:
+
+- `NEXTAUTH_SECRET`: Required for NextAuth.js authentication
+- `NEXT_PUBLIC_GSB_API_URL`: API endpoint for the GSB backend
+- `NEXT_PUBLIC_DEFAULT_TENANT_CODE`: Default tenant code for GSB
+- `DATABASE_URL`: PostgreSQL connection string (optional for development)
+
+## Architecture
+
+ApexBase follows a modern architecture:
+
+- **Frontend**: Next.js with React and TypeScript
+- **UI Framework**: Tailwind CSS with shadcn/ui components
+- **Authentication**: NextAuth.js with JWT strategy
+- **Data Layer**: GSB (Global Service Bus) API for all backend interactions
 
 ## Documentation
 

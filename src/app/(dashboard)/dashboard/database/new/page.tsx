@@ -56,7 +56,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/components/ui/use-toast";
-import { EntityDefService } from "@/lib/services/entity-def.service";
+import { EntityDefService } from '@/lib/gsb/services/entity/entity-def.service';
 import { Label as UILabel } from "@/components/ui/label";
 
 // Form schemas for each step

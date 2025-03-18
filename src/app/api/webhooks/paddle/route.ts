@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PaddleWebhookEvent, PaddleWebhookPayload } from '@/lib/services/paddle.service';
+import { PaddleWebhookEvent, PaddleWebhookPayload } from '@/lib/gsb/services/subscription/paddle.service';
 
 /**
  * Paddle webhooks handler

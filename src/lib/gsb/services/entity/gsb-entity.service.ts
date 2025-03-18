@@ -1,7 +1,10 @@
-import { GsbApiService } from '../api/gsb-api.service';
-import { QueryParams } from '../types/query-params';
-import { GsbSaveRequest, GsbSaveMultiRequest, GsbSaveMappedRequest, GsbGetCodeRequest } from '../types/requests';
-import { GsbQueryResponse, GsbSaveResponse, GsbQueryOpResponse, GsbSaveMultiResponse, GsbDefinitionResponse, GsbGetCodeResponse } from '../types/responses';
+'use client';
+
+import { GsbApiService } from '../../api/gsb-api.service';
+import { QueryParams } from '../../types/query-params';
+import { GsbSaveRequest, GsbSaveMultiRequest, GsbSaveMappedRequest, GsbGetCodeRequest } from '../../types/requests';
+import { GsbQueryResponse, GsbSaveResponse, GsbQueryOpResponse, GsbSaveMultiResponse, GsbDefinitionResponse, GsbGetCodeResponse } from '../../types/responses';
+
 
 interface GetTokenRequest {
     email: string;

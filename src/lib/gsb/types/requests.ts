@@ -1,10 +1,10 @@
 export class GsbSaveRequest {
-    entDefName = "";
-    entDefId = "";
-    entityDef = {};
-    entity = {};
-    query = [];
-    entityId = "";
+    entDefName? = "";
+    entDefId? = "";
+    entityDef? = {};
+    entity? = {};
+    query? = [];
+    entityId? = "";
 }
 
 export class GsbSaveMappedRequest {

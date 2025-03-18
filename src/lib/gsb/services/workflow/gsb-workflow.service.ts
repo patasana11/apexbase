@@ -1,10 +1,12 @@
-import { GsbEntityService } from '../gsb/services/gsb-entity.service';
-import { getGsbToken, getGsbTenantCode } from '../config/gsb-config';
+'use client';
+
+import { GsbEntityService } from '../../services/entity/gsb-entity.service';
+import { getGsbToken, getGsbTenantCode } from '../../config/gsb-config';
 import { GsbWorkflow, GsbActivity, GsbTransition } from '@/models/workflow';
-import { QueryParams } from '../gsb/types/query-params';
-import { createEmptyWorkflow } from '../workflow-utils';
-import { GsbSaveRequest } from '../gsb/types/requests';
-import { GsbQueryResponse, GsbSaveResponse, GsbQueryOpResponse } from '../gsb/types/responses';
+import { QueryParams } from '../../types/query-params';
+import { createEmptyWorkflow } from './workflow-utils';
+import { GsbSaveRequest } from '../../types/requests';
+import { GsbQueryResponse, GsbSaveResponse, GsbQueryOpResponse } from '../../types/responses';
 
 export class GsbWorkflowService {
   private entityService: GsbEntityService;

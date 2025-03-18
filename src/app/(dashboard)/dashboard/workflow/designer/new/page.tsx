@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { createEmptyWorkflow } from "@/lib/workflow-utils";
+import { createEmptyWorkflow } from "@/lib/gsb/services/workflow/workflow-utils";
 
 export default function NewWorkflowRedirect() {
   const router = useRouter();

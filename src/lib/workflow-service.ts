@@ -5,7 +5,7 @@ import {
   ActivityType,
   TransitionType
 } from '@/models/workflow';
-import { createEmptyWorkflow } from './workflow-utils';
+import { createEmptyWorkflow } from './gsb/services/workflow/workflow-utils';
 
 // Mock data for demo purposes
 const MOCK_WORKFLOWS: Record<string, GsbWorkflow> = {

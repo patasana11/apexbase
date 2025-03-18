@@ -2,6 +2,7 @@
 
 import { SessionProvider } from 'next-auth/react';
 import { ThemeProvider } from '@/components/theme-provider';
+import { AuthCheck } from '@/components/auth-check';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -12,7 +13,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         enableSystem
         disableTransitionOnChange
       >
-        {children}
+        <AuthCheck>{children}</AuthCheck>
       </ThemeProvider>
     </SessionProvider>
   );

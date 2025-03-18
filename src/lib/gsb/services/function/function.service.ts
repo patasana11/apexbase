@@ -1,10 +1,12 @@
-import { GsbEntityService } from '../gsb/services/gsb-entity.service';
-import { GsbSaveRequest } from '../gsb/types/requests';
-import { QueryParams } from '../gsb/types/query-params';
-import { QueryFunction } from '../gsb/types/query';
-import { getGsbToken, getGsbTenantCode } from '../config/gsb-config';
-import { GsbWfFunction } from '../models/gsb-function.model';
-import { setGsbCreateFields, setGsbUpdateFields, getGsbDateSortCols } from '../utils/gsb-utils';
+'use client';
+
+import { GsbEntityService } from '../../services/entity/gsb-entity.service';
+import { GsbSaveRequest } from '../../types/requests';
+import { QueryParams } from '../../types/query-params';
+import { QueryFunction } from '../../types/query';
+import { getGsbToken, getGsbTenantCode } from '../../config/gsb-config';
+import { GsbWfFunction } from '../../models/gsb-function.model';
+import { setGsbCreateFields, setGsbUpdateFields, getGsbDateSortCols } from '../../utils/gsb-utils';
 
 /**
  * Service for managing Serverless Functions in the application

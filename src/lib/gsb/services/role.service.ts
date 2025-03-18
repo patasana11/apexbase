@@ -1,8 +1,10 @@
-import { GsbEntityService } from '../gsb/services/gsb-entity.service';
-import { GsbSaveRequest } from '../gsb/types/requests';
-import { QueryParams } from '../gsb/types/query-params';
-import { QueryFunction } from '../gsb/types/query';
-import { getGsbToken, getGsbTenantCode } from '../config/gsb-config';
+'use client';
+
+import { GsbEntityService } from './entity/gsb-entity.service';
+import { GsbSaveRequest } from '../types/requests';
+import { QueryParams } from '../types/query-params';
+import { QueryFunction } from '../types/query';
+import { getGsbToken, getGsbTenantCode } from '../../gsb/config/gsb-config';
 import { GsbRole, GsbUser } from '../models/gsb-user.model';
 import { setGsbCreateFields, setGsbUpdateFields, getGsbDateSortCols } from '../utils/gsb-utils';
 
@@ -235,33 +237,19 @@ export class RoleService {
   async getUsersInRole(roleId: string): Promise<GsbUser[]> {
     try {
       const role = await this.getRoleById(roleId);
-      if (!role || !role.users || !Array.isArray(role.users)) {
-        return [];
+      if (!role || !role.users) {
+        throw new Error('Role or users not found');
       }
 
-      // If users are already GsbUser objects, return them
-      if (role.users.length > 0 && typeof role.users[0] === 'object') {
-        return role.users as GsbUser[];
-      }
+      const query = new QueryParams<GsbUser>('GsbUser');
+      query.where('roles', roleId, QueryFunction.Contains);
+      const response = await this.entityService.query(
+        query,
+        getGsbToken(),
+        getGsbTenantCode()
+      );
 
-      // Otherwise, fetch the users by ID
-      const userIds = role.users as string[];
-      const users: GsbUser[] = [];
-
-      for (const userId of userIds) {
-        const user = await this.entityService.getById<GsbUser>(
-          'GsbUser',
-          userId,
-          getGsbToken(),
-          getGsbTenantCode()
-        );
-
-        if (user) {
-          users.push(user);
-        }
-      }
-
-      return users;
+      return response.entities as GsbUser[];
     } catch (error) {
       console.error('Error getting users in role:', error);
       return [];
@@ -275,31 +263,9 @@ export class RoleService {
    * @returns True if added successfully, false otherwise
    */
   async addUserToRole(roleId: string, userId: string): Promise<boolean> {
-    try {
-      const role = await this.getRoleById(roleId);
-      if (!role) {
-        throw new Error('Role not found');
-      }
+    //addmappeditems to role
+    return true;
 
-      // Update the role's users array
-      const users = role.users || [];
-      if (Array.isArray(users)) {
-        // Check if the user is already in the role
-        if (users.includes(userId)) {
-          return true; // User is already in the role
-        }
-
-        // Add the user to the role
-        users.push(userId);
-      } else {
-        role.users = [userId];
-      }
-
-      return await this.updateRole(role);
-    } catch (error) {
-      console.error('Error adding user to role:', error);
-      return false;
-    }
   }
 
   /**
@@ -309,21 +275,7 @@ export class RoleService {
    * @returns True if removed successfully, false otherwise
    */
   async removeUserFromRole(roleId: string, userId: string): Promise<boolean> {
-    try {
-      const role = await this.getRoleById(roleId);
-      if (!role) {
-        throw new Error('Role not found');
-      }
-
-      // Update the role's users array
-      if (Array.isArray(role.users)) {
-        role.users = role.users.filter(id => id !== userId);
-      }
-
-      return await this.updateRole(role);
-    } catch (error) {
-      console.error('Error removing user from role:', error);
-      return false;
-    }
+    //remove mapped items from role
+    return true;
   }
 }

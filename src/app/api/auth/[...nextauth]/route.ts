@@ -2,8 +2,28 @@ import NextAuth from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import GitHubProvider from 'next-auth/providers/github';
 import CredentialsProvider from 'next-auth/providers/credentials';
-import { AuthService } from '@/lib/services/auth.service';
+import { AuthService } from '@/lib/gsb/services/auth/auth.service';
 import { logger } from '@/lib/logger';
+
+// Extend the next-auth types to include our custom fields
+declare module "next-auth" {
+  interface User {
+    gsbToken?: string;
+    tokenExpiry?: string | undefined;
+  }
+  
+  interface Session {
+    gsbToken?: string;
+    tokenExpiry?: string | undefined;
+  }
+}
+
+declare module "next-auth/jwt" {
+  interface JWT {
+    gsbToken?: string;
+    tokenExpiry?: string | undefined;
+  }
+}
 
 const handler = NextAuth({
   providers: [
@@ -38,9 +58,36 @@ const handler = NextAuth({
         }
 
         try {
+          // In development environment, we might want to bypass the GSB auth
+          if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_SKIP_GSB_AUTH === 'true') {
+            logger.info('Development mode: Bypassing GSB authentication');
+            return {
+              id: credentials.email,
+              email: credentials.email,
+              name: credentials.email.split('@')[0],
+              gsbToken: 'dev-token',
+              tokenExpiry: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+            };
+          }
+          
           const authService = new AuthService();
           const tenantCode = process.env.NEXT_PUBLIC_DEFAULT_TENANT_CODE || 'dev1';
           
+          // Check if we already have a token from the GSB client-side authentication
+          // If so, we can skip the server-side authentication
+          const existingToken = authService.getToken();
+          if (existingToken) {
+            logger.info('Found existing GSB token, skipping login call');
+            return {
+              id: credentials.email,
+              email: credentials.email,
+              name: credentials.email.split('@')[0],
+              gsbToken: existingToken,
+              tokenExpiry: undefined,
+            };
+          }
+          
+          // Otherwise, perform the login
           const response = await authService.login({
             email: credentials.email,
             password: credentials.password,
@@ -126,9 +173,6 @@ const handler = NextAuth({
         }
       }
 
-      // Token refresh is now handled by the AuthService automatically
-      // We don't need to manually refresh tokens here
-
       return token;
     },
     async session({ session, token }) {
@@ -141,12 +185,25 @@ const handler = NextAuth({
       return session;
     },
   },
+  // Pages config - defines where auth flows should redirect
   pages: {
     signIn: '/login',
     signOut: '/',
     error: '/login',
     verifyRequest: '/verify',
     newUser: '/register'
+  },
+  debug: process.env.NODE_ENV === 'development',
+  logger: {
+    error: (code, metadata) => {
+      logger.error(code, metadata);
+    },
+    warn: (code) => {
+      logger.warn(code);
+    },
+    debug: (code, metadata) => {
+      logger.debug(code, metadata);
+    },
   },
   events: {
     async signOut({ token }) {

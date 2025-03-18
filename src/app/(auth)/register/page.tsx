@@ -31,8 +31,8 @@ import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PlanSelector } from "@/components/plan-selector";
-import { DEFAULT_PLANS, paddleService } from "@/lib/services/paddle.service";
-import { AuthService } from "@/lib/services/auth.service";
+import { DEFAULT_PLANS, paddleService } from '@/lib/gsb/services/subscription/paddle.service';
+import { AuthService } from '@/lib/gsb/services/auth/auth.service';
 
 // Registration form schema with validation
 const registerSchema = z.object({
@@ -89,7 +89,7 @@ export default function RegisterPage() {
 
     try {
       const authService = new AuthService();
-      
+
       // First, register with GSB
       // Note: We need to implement a register method in AuthService
       // For now, we'll use a direct API call
@@ -133,9 +133,9 @@ export default function RegisterPage() {
           title: "ApexBase Subscription",
           successUrl: `${window.location.origin}/dashboard`,
           closeUrl: `${window.location.origin}/register`,
-          passthrough: JSON.stringify({ 
+          passthrough: JSON.stringify({
             email: values.email,
-            userId: registrationResult.userId 
+            userId: registrationResult.userId
           })
         });
       } else {
@@ -322,6 +322,53 @@ export default function RegisterPage() {
         <TabsContent value="plan">
           <CardContent>
             <PlanSelector
+              plans={[
+                {
+                  id: 'starter',
+                  name: 'Starter',
+                  description: 'Essential features for small projects',
+                  priceDisplay: '$9',
+                  interval: 'month',
+                  features: [
+                    '5 projects',
+                    '10GB storage',
+                    'Basic analytics',
+                    'Email support',
+                  ],
+                  isPopular: false
+                },
+                {
+                  id: 'pro',
+                  name: 'Professional',
+                  description: 'Everything you need for growing businesses',
+                  priceDisplay: '$29',
+                  interval: 'month',
+                  features: [
+                    'Unlimited projects',
+                    '100GB storage',
+                    'Advanced analytics',
+                    'Priority support',
+                    'Team collaboration',
+                  ],
+                  isPopular: true
+                },
+                {
+                  id: 'enterprise',
+                  name: 'Enterprise',
+                  description: 'Advanced features for larger organizations',
+                  priceDisplay: '$79',
+                  interval: 'month',
+                  features: [
+                    'Unlimited projects',
+                    'Unlimited storage',
+                    'Custom reporting',
+                    'Dedicated support',
+                    'SSO & advanced security',
+                    'Custom integrations',
+                  ],
+                  isPopular: false
+                }
+              ]}
               selectedPlan={selectedPlan}
               onPlanSelect={setSelectedPlan}
               billing={billing}

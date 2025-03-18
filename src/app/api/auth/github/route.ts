@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { RegistrationService, SocialProvider } from '@/lib/services/registration.service';
+import { RegistrationService, SocialProvider } from '@/lib/gsb/services/registration.service';
 
 // This is a mock implementation
 // In a real app, you would use a proper OAuth flow

@@ -1,11 +1,25 @@
 'use client';
 
+import { Suspense } from 'react';
 import RegistrationForm from '@/components/registration/RegistrationForm';
 import SocialLoginButtons from '@/components/registration/SocialLoginButtons';
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function RegistrationPage() {
+// Loading component for suspense fallback
+function RegistrationLoading() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-gray-50">
+      <div className="text-center">
+        <div className="mx-auto h-16 w-16 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600"></div>
+        <p className="mt-6 text-lg font-medium text-gray-800">Loading registration...</p>
+      </div>
+    </div>
+  );
+}
+
+// Main registration component that uses searchParams
+function RegistrationContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isRedirected, setIsRedirected] = useState(false);
@@ -127,5 +141,14 @@ export default function RegistrationPage() {
         </div>
       </footer>
     </div>
+  );
+}
+
+// Main page component with suspense boundary
+export default function RegistrationPage() {
+  return (
+    <Suspense fallback={<RegistrationLoading />}>
+      <RegistrationContent />
+    </Suspense>
   );
 }

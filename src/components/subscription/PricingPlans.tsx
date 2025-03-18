@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { RegistrationType } from '@/lib/services/registration.service';
-import { usePaddleClient } from '@/lib/services/paddle-client.service';
+import { RegistrationType } from '@/lib/gsb/services/registration.service';
+import { usePaddleClient } from '@/lib/gsb/services/subscription/paddle-client.service';
 
 // Define the subscription plans
 const subscriptionPlans = [

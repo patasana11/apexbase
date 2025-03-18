@@ -1,3 +1,5 @@
+'use client';
+
 import { GsbWorkflow, GsbActivity, GsbTransition, ActivityType, TransitionType } from '@/models/workflow';
 
 export class GsbWorkflowService {

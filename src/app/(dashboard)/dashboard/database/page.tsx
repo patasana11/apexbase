@@ -51,9 +51,9 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
-import { GsbEntityDef } from "@/lib/models/gsb-entity-def.model";
-import { EntityDefService } from "@/lib/services/entity-def.service";
-import { setGsbToken, setGsbTenantCode } from "@/lib/config/gsb-config";
+import { GsbEntityDef } from '@/lib/gsb/models/gsb-entity-def.model';
+import { EntityDefService } from '@/lib/gsb/services/entity/entity-def.service';
+import { setGsbToken, setGsbTenantCode } from '@/lib/gsb/config/gsb-config';
 import ClientOnly from "@/components/client-only";
 import { useRouter } from "next/navigation";
 import { createClientComponent } from "@/components/dynamic-component";

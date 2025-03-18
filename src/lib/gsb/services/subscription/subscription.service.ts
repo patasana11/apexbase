@@ -1,3 +1,5 @@
+'use client';
+
 import { GsbSubscription, GsbSubscriptionPlan, PaymentType, SubscriptionPlanStatus } from '@/types/gsb-subscription';
 
 /**

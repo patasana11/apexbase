@@ -1,15 +1,17 @@
 import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 import { withAuth } from 'next-auth/middleware';
 
 /**
  * ApexBase Middleware
- * 
+ *
  * This middleware handles authentication and authorization for the application.
- * The system uses GSB API exclusively as the backend, with NextAuth for authentication.
- * NextAuth JWT strategy is used for session management, without a database adapter.
+ * It's simplified to avoid server-side redirects and focus on client-side authentication.
  */
 export default withAuth(
   function middleware(req) {
+    const path = req.nextUrl.pathname;
+    
     // Add GSB token to request headers if available
     const token = req.nextauth?.token;
     if (token?.gsbToken) {
@@ -28,43 +30,70 @@ export default withAuth(
   {
     callbacks: {
       authorized: ({ token, req }) => {
-        // Public routes and auth routes - allow access without authentication
-        if (req.nextUrl.pathname.startsWith('/api/auth') ||
-            req.nextUrl.pathname === '/' ||
-            req.nextUrl.pathname.startsWith('/pricing') ||
-            req.nextUrl.pathname.startsWith('/terms') ||
-            req.nextUrl.pathname.startsWith('/privacy') ||
-            req.nextUrl.pathname.startsWith('/blog') ||
-            req.nextUrl.pathname.startsWith('/contact') ||
-            req.nextUrl.pathname.startsWith('/about') ||
-            req.nextUrl.pathname.startsWith('/login') ||
-            req.nextUrl.pathname.startsWith('/register') ||
-            req.nextUrl.pathname.startsWith('/verify')) {
+        const path = req.nextUrl.pathname;
+
+        // Special handling for root and public paths
+        if (path === '/' || isPublicRoute(path)) {
           return true;
         }
-        
+
         // Protected routes - require authentication
         return !!token;
       },
     },
+    pages: {
+      signIn: '/login',
+    }
   }
 );
 
-// Configure protected routes and public routes
-export const config = {
-  matcher: [
-    // Protected routes (SPA)
-    '/dashboard/:path*',
-    '/account/:path*',
-    '/api/:path*',
-    
-    // Public routes (SSR)
-    '/',
+/**
+ * Helper function to check if a route is public
+ */
+function isPublicRoute(pathname: string): boolean {
+  const publicPaths = [
+    '/api/auth',
     '/pricing',
     '/terms',
     '/privacy',
-    '/blog/:path*',
+    '/blog',
     '/contact',
     '/about',
+    '/login',
+    '/register',
+    '/forgot-password',
+    '/verify',
+    '/checkout',
+    '/_next',
+    '/favicon',
+    '/registration',
+    '/test-gsb',
+    '/icon',
+    '/globals.css',
+  ];
+
+  // Static assets and root path are always public
+  if (pathname === '/' || 
+      pathname.startsWith('/_next/') ||
+      pathname.endsWith('.ico') ||
+      pathname.endsWith('.png') ||
+      pathname.endsWith('.svg') ||
+      pathname.endsWith('.jpg') ||
+      pathname.endsWith('.jpeg') ||
+      pathname.endsWith('.webp') ||
+      pathname.endsWith('.css') ||
+      pathname.endsWith('.js')) {
+    return true;
+  }
+
+  // Check if pathname starts with any of the public paths
+  return publicPaths.some(path => pathname.startsWith(path));
+}
+
+// Specify which routes the middleware applies to
+export const config = {
+  matcher: [
+    // Include all routes except static assets
+    '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
-}; 
+};

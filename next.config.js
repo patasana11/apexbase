@@ -1,36 +1,36 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Use standalone output for deployment
+  output: 'standalone',
+
   // Don't run type checking during build (speeds up build)
   typescript: {
     ignoreBuildErrors: true,
   },
+
   // Don't run ESLint during build
   eslint: {
     ignoreDuringBuilds: true,
   },
-  // External URL domains
-  images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'images.unsplash.com',
-      },
-      {
-        protocol: 'https',
-        hostname: '*.gsbapps.net',
-      },
-      {
-        protocol: 'https',
-        hostname: 'randomuser.me',
-      },
-      {
-        protocol: 'https',
-        hostname: 'ui-avatars.com',
-      },
-    ],
-  },
-  // Other options
+
+  // Enable React strict mode for better development experience
   reactStrictMode: true,
+
+  // Configure image domains for remote images
+  images: {
+    domains: ['images.unsplash.com', 'same-assets.com'],
+  },
+
+  // Handle redirects
+  async redirects() {
+    return [
+      {
+        source: '/signup',
+        destination: '/registration',
+        permanent: true,
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;

@@ -23,8 +23,7 @@ export interface GsbUser {
 export interface GsbRole {
   id: string;
   name: string;
-  users?: string[] | GsbUser[];
-  positions?: string[];
+  users?: GsbUser[];
   createDate?: Date;
   lastUpdateDate?: Date;
   createdBy_id?: string;

@@ -1,10 +1,27 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
-export default function CheckoutSuccessPage() {
+// Loading component for suspense fallback
+function CheckoutSuccessLoading() {
+  return (
+    <div className="mx-auto max-w-md px-4 py-12 sm:px-6 lg:px-8">
+      <div className="rounded-lg bg-white p-6 shadow">
+        <div className="text-center">
+          <h2 className="text-2xl font-semibold">Processing payment...</h2>
+          <div className="mt-6 flex justify-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Main checkout success component that uses searchParams
+function CheckoutSuccessContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isProcessing, setIsProcessing] = useState(true);
@@ -113,5 +130,14 @@ export default function CheckoutSuccessPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Main page component with suspense boundary
+export default function CheckoutSuccessPage() {
+  return (
+    <Suspense fallback={<CheckoutSuccessLoading />}>
+      <CheckoutSuccessContent />
+    </Suspense>
   );
 }

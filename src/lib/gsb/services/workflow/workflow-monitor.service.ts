@@ -1,8 +1,10 @@
-import { GsbEntityService } from '../gsb/services/gsb-entity.service';
-import { getGsbToken, getGsbTenantCode } from '../config/gsb-config';
+'use client';
+
+import { GsbEntityService } from '../../services/entity/gsb-entity.service';
+import { getGsbToken, getGsbTenantCode } from '../../config/gsb-config';
 import { GsbWorkflow, GsbWorkflowInstance, TaskStatus } from '@/models/workflow';
-import { QueryParams } from '../gsb/types/query-params';
-import { SelectCol, SortCol } from '../gsb/types/query';
+import { QueryParams } from '../../types/query-params';
+import { SelectCol, SortCol } from '../../types/query';
 
 export interface WorkflowStatus {
   id: string;

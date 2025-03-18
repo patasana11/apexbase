@@ -1,10 +1,23 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
-export default function VerifyPage() {
+// Loading component for suspense fallback
+function VerifyLoading() {
+  return (
+    <div className="mx-auto max-w-md px-4 py-12 sm:px-6 lg:px-8">
+      <div className="rounded-lg bg-white p-8 shadow text-center">
+        <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600"></div>
+        <h2 className="mt-4 text-xl font-semibold">Loading verification...</h2>
+      </div>
+    </div>
+  );
+}
+
+// Main verification component that uses searchParams
+function VerifyContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const email = searchParams?.get('email');
@@ -190,5 +203,14 @@ export default function VerifyPage() {
         )}
       </div>
     </div>
+  );
+}
+
+// Main page component with suspense boundary
+export default function VerifyPage() {
+  return (
+    <Suspense fallback={<VerifyLoading />}>
+      <VerifyContent />
+    </Suspense>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { AppInitializerService } from '@/lib/services/app-initializer.service';
+import { AppInitializerService } from '@/lib/gsb/services/app-initializer.service';
 
 /**
  * TenantInitializer component

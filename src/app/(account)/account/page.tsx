@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { getWorkspaceUrl } from "@/lib/config/tenant-config";
+import { getWorkspaceUrl } from '@/lib/gsb/config/tenant-config';
 
 // Mock data for workspaces
 const workspaces = [

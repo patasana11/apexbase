@@ -30,7 +30,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { WorkflowMonitorService } from "@/lib/services/workflow-monitor.service";
+import { WorkflowMonitorService } from '@/lib/gsb/services/workflow/workflow-monitor.service';
 
 // Initialize the workflow monitor service
 const workflowMonitor = new WorkflowMonitorService();

@@ -1,8 +1,10 @@
-import { GsbEntityService } from '../gsb/services/gsb-entity.service';
-import { GsbSaveRequest } from '../gsb/types/requests';
-import { QueryParams } from '../gsb/types/query-params';
-import { QueryFunction } from '../gsb/types/query';
-import { getGsbToken, getGsbTenantCode } from '../config/gsb-config';
+'use client';
+
+import { GsbEntityService } from './entity/gsb-entity.service';
+import { GsbSaveRequest } from '../types/requests';
+import { QueryParams } from '../types/query-params';
+import { QueryFunction } from '../types/query';
+import { getGsbToken, getGsbTenantCode } from '../../gsb/config/gsb-config';
 import { GsbPermission, GsbPermissionType } from '../models/gsb-user.model';
 import { setGsbCreateFields, setGsbUpdateFields, getGsbDateSortCols } from '../utils/gsb-utils';
 
@@ -234,7 +236,7 @@ export class PermissionService {
    */
   async getEntityPermissions(entityDefId: string): Promise<GsbPermission[]> {
     try {
-      const query = new QueryParams<GsbPermission>(this.ENTITY_NAME);
+      const query : any= new QueryParams<GsbPermission>(this.ENTITY_NAME);
 
       // Add filter for entity definition
       query.query = [
@@ -267,10 +269,10 @@ export class PermissionService {
    */
   async getUserPermissions(userId: string): Promise<GsbPermission[]> {
     try {
-      const query = new QueryParams<GsbPermission>(this.ENTITY_NAME);
+      const query :any = new QueryParams<GsbPermission>(this.ENTITY_NAME);
 
       // Add filter for user
-      query.query = [
+      query.query   = [
         {
           propVal: {
             name: 'users',
@@ -300,7 +302,7 @@ export class PermissionService {
    */
   async getRolePermissions(roleId: string): Promise<GsbPermission[]> {
     try {
-      const query = new QueryParams<GsbPermission>(this.ENTITY_NAME);
+      const query :any = new QueryParams<GsbPermission>(this.ENTITY_NAME);
 
       // Add filter for role
       query.query = [

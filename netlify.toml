@@ -1,6 +1,6 @@
 [build]
-  command = "bun run build"
-  publish = "build"
+  command = "npx next build"
+  publish = ".next"
 
 [build.environment]
   NETLIFY_NEXT_PLUGIN_SKIP = "true"

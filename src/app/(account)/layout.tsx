@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { COMMON_TENANT, shouldInitTenant } from "@/lib/config/tenant-config";
+import { COMMON_TENANT, shouldInitTenant } from '@/lib/gsb/config/tenant-config';
 
 // Icons
 import {

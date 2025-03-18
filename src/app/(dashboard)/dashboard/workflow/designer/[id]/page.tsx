@@ -61,12 +61,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { Editor } from '@monaco-editor/react';
 import { GsbWorkflow, GsbActivity, GsbTransition, ActivityType, TransitionType } from '@/models/workflow';
-import { GsbWorkflowService } from '@/lib/services/workflow.service';
+import { GsbWorkflowService } from '@/lib/gsb/services/workflow/workflow.service';
 
 // Import our custom components and utils
 import { getActivityTypeName } from '@/components/workflow/activity-nodes';
-import { workflowToReactFlow, reactFlowToWorkflow, generateId } from '@/lib/workflow-utils';
-import { WorkflowMonitorService } from '@/lib/services/workflow-monitor.service';
+import { workflowToReactFlow, reactFlowToWorkflow, generateId } from '@/lib/gsb/services/workflow/workflow-utils';
+import { WorkflowMonitorService } from '@/lib/gsb/services/workflow/workflow-monitor.service';
 import { format } from 'date-fns';
 import { QueryParams } from '@/lib/gsb/types/query-params';
 import ActivityConfigPanel from '@/components/workflow/activity-config-panel';

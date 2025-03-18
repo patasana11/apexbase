@@ -5,9 +5,9 @@ import { useRouter } from 'next/navigation';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { RegistrationType } from '@/lib/services/registration.service';
-import { usePaddleClient } from '@/lib/services/paddle-client.service';
-import { DEFAULT_PLANS } from '@/lib/services/paddle.service';
+import { RegistrationType } from '@/lib/gsb/services/registration.service';
+import { usePaddleClient } from '@/lib/gsb/services/subscription/paddle-client.service';
+import { DEFAULT_PLANS } from '@/lib/gsb/services/subscription/paddle.service';
 
 // Form schema
 const registrationSchema = z.object({

@@ -1,4 +1,4 @@
-import { GsbEntityService } from './gsb-entity.service';
+import { GsbEntityService } from '../entity/gsb-entity.service';
 import { GsbSaveRequest } from '../types/requests';
 import { GsbQueryResponse, GsbSaveResponse, GsbQueryOpResponse } from '../types/responses';
 import { describe, beforeEach, it, expect } from 'vitest';

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { RegistrationService, IRegistrationData } from '@/lib/services/registration.service';
+import { RegistrationService, IRegistrationData } from '@/lib/gsb/services/registration.service';
 
 export async function POST(req: NextRequest) {
   try {

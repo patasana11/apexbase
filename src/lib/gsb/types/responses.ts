@@ -3,6 +3,7 @@ export class GsbQueryResponse {
     status?: number | undefined;
     entities?: any[] | undefined;
     entity?: any;
+    totalCount?: number | undefined;
 }
 
 export class GsbGetCodeResponse {

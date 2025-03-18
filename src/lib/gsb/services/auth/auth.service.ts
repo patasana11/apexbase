@@ -1,5 +1,7 @@
-import { GsbEntityService } from '../gsb/services/gsb-entity.service';
-import { setGsbToken, setGsbTenantCode, clearGsbAuth, GSB_CONFIG } from '../config/gsb-config';
+'use client';
+
+import { GsbEntityService } from '../entity/gsb-entity.service';
+import { setGsbToken, setGsbTenantCode, clearGsbAuth, GSB_CONFIG } from '../../config/gsb-config';
 
 // Local storage keys
 const TOKEN_STORAGE_KEY = 'gsb_auth_token';
@@ -51,7 +53,7 @@ export class AuthService {
       try {
         const token = localStorage.getItem(TOKEN_STORAGE_KEY);
         const tenantCode = localStorage.getItem(TENANT_STORAGE_KEY);
-        
+
         if (token && tenantCode) {
           this.token = token;
           this.tenantCode = tenantCode;
@@ -147,7 +149,7 @@ export class AuthService {
         // Store authentication data
         this.token = response.auth.token;
         this.tenantCode = tenantCode;
-        
+
         // Set in global config
         setGsbToken(response.auth.token);
         setGsbTenantCode(tenantCode);
@@ -162,7 +164,7 @@ export class AuthService {
           expireDate: response.auth.expireDate,
           title: response.auth.title
         };
-        
+
         this.saveToStorage(response.auth.token, tenantCode, userData, remember);
 
         return {
@@ -227,7 +229,7 @@ export class AuthService {
     if (!this.token) {
       return false;
     }
-    
+
     const userData = this.getUserFromToken(this.token);
     if (!userData || !userData.roles) {
       return false;
@@ -247,10 +249,17 @@ export class AuthService {
   }
 
   /**
-   * Get the current token
-   * @returns Current token or null
+   * Get the current auth token
+   * @returns The current auth token or null if not authenticated
    */
   getToken(): string | null {
+    // If token not loaded yet, try to load from localStorage
+    if (!this.token && typeof window !== 'undefined') {
+      const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
+      if (storedToken) {
+        this.token = storedToken;
+      }
+    }
     return this.token;
   }
 
@@ -262,7 +271,7 @@ export class AuthService {
     if (typeof window === 'undefined') {
       return null;
     }
-    
+
     try {
       const userData = localStorage.getItem(USER_DATA_STORAGE_KEY);
       return userData ? JSON.parse(userData) : null;

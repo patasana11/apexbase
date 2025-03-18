@@ -3,23 +3,24 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Icons } from "@/components/icons";
-import { AuthService } from "@/lib/services/auth.service";
+import { AuthService } from '@/lib/gsb/services/auth/auth.service';
 
 export default function LoginPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    remember: false,
-    tenantCode: process.env.NEXT_PUBLIC_DEFAULT_TENANT_CODE || 'dev1',
+    email: 'admin@apexbase.dev',
+    password: 'password123',
+    remember: true,
+    tenantCode: process.env.NEXT_PUBLIC_DEFAULT_TENANT_CODE || 'apexbase',
   });
 
   const authService = new AuthService();
@@ -30,32 +31,48 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      // Authenticate with GSB
-      const authResponse = await authService.login({
-        email: formData.email,
-        password: formData.password,
-        tenantCode: formData.tenantCode,
-        remember: formData.remember,
-      });
+      console.log('Starting login process with GSB...');
+      
+      // Skip GSB auth in development if needed
+      if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_SKIP_GSB_AUTH === 'true') {
+        console.log('Development mode: Skipping GSB authentication');
+      } else {
+        // Authenticate with GSB
+        const authResponse = await authService.login({
+          email: formData.email,
+          password: formData.password,
+          tenantCode: formData.tenantCode,
+          remember: formData.remember,
+        });
 
-      if (!authResponse.success) {
-        throw new Error(authResponse.error || 'Authentication failed');
+        if (!authResponse.success) {
+          throw new Error(authResponse.error || 'Authentication failed');
+        }
+        
+        console.log('GSB authentication successful');
       }
 
-      // Then, authenticate with NextAuth
+      // Then authenticate with NextAuth
+      console.log('Starting NextAuth authentication...');
       const result = await signIn('credentials', {
+        redirect: false,
         email: formData.email,
         password: formData.password,
         remember: formData.remember,
-        redirect: false,
       });
+
+      console.log('NextAuth result:', result);
 
       if (result?.error) {
         throw new Error(result.error);
       }
 
-      // Redirect to dashboard on success
-      router.push('/dashboard');
+      if (result?.ok) {
+        console.log('Login successful, redirecting to dashboard');
+        router.push('/dashboard');
+      } else {
+        throw new Error('Authentication failed');
+      }
     } catch (error) {
       console.error('Login error:', error);
       setError(error instanceof Error ? error.message : 'Login failed');
@@ -69,51 +86,25 @@ export default function LoginPage() {
     setError(null);
 
     try {
+      console.log(`Starting ${provider} login...`);
       const result = await signIn(provider, {
         redirect: false,
         callbackUrl: '/dashboard',
       });
+
+      console.log(`${provider} login result:`, result);
 
       if (result?.error) {
         throw new Error(result.error);
       }
 
       if (result?.url) {
+        console.log(`Redirecting to: ${result.url}`);
         router.push(result.url);
       }
     } catch (error) {
       console.error('Social login error:', error);
       setError(error instanceof Error ? error.message : 'Social login failed');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Handle social auth callback
-  const handleSocialAuthCallback = async (provider: string, token: string) => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      // Authenticate with GSB using the social token
-      const authResponse = await authService.login({
-        email: formData.email, // This might be populated from the social provider
-        tenantCode: formData.tenantCode,
-        remember: formData.remember,
-        ...(provider === 'google' && { googleToken: token }),
-        ...(provider === 'facebook' && { facebookToken: token }),
-        ...(provider === 'apple' && { appleToken: token }),
-      });
-
-      if (!authResponse.success) {
-        throw new Error(authResponse.error || 'Social authentication failed');
-      }
-
-      // Redirect to dashboard on success
-      router.push('/dashboard');
-    } catch (error) {
-      console.error('Social auth callback error:', error);
-      setError(error instanceof Error ? error.message : 'Social authentication failed');
     } finally {
       setIsLoading(false);
     }
@@ -134,7 +125,7 @@ export default function LoginPage() {
               <p className="text-sm text-red-800">{error}</p>
             </div>
           )}
-          
+
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <Input
@@ -165,16 +156,18 @@ export default function LoginPage() {
               <Checkbox
                 id="remember"
                 checked={formData.remember}
-                onCheckedChange={(checked) => 
+                onCheckedChange={(checked) =>
                   setFormData({ ...formData, remember: checked === true })
                 }
                 disabled={isLoading}
               />
               <Label htmlFor="remember" className="text-sm">Remember me</Label>
             </div>
-            <Button variant="link" className="px-0 font-normal" disabled={isLoading}>
-              Forgot password?
-            </Button>
+            <Link href="/forgot-password">
+              <Button variant="link" className="px-0 font-normal" disabled={isLoading}>
+                Forgot password?
+              </Button>
+            </Link>
           </div>
 
           <Button type="submit" className="w-full" disabled={isLoading}>
@@ -198,6 +191,7 @@ export default function LoginPage() {
               variant="outline"
               onClick={() => handleSocialLogin('google')}
               disabled={isLoading}
+              type="button"
             >
               <Icons.google className="mr-2 h-4 w-4" />
               Google
@@ -206,6 +200,7 @@ export default function LoginPage() {
               variant="outline"
               onClick={() => handleSocialLogin('github')}
               disabled={isLoading}
+              type="button"
             >
               <Icons.gitHub className="mr-2 h-4 w-4" />
               GitHub
@@ -213,6 +208,14 @@ export default function LoginPage() {
           </div>
         </form>
       </CardContent>
+      <CardFooter className="flex justify-center">
+        <p className="text-sm text-muted-foreground">
+          Don't have an account?{" "}
+          <Link href="/register" className="text-primary underline-offset-4 hover:underline">
+            Register
+          </Link>
+        </p>
+      </CardFooter>
     </Card>
   );
 }

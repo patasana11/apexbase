@@ -1,5 +1,7 @@
+'use client';
+
 import { GsbCmRegistration } from '@/types/gsb-subscription';
-import { SubscriptionService } from './subscription.service';
+import { SubscriptionService } from './subscription/subscription.service';
 
 export enum RegistrationType {
   Free = 1,

@@ -21,7 +21,10 @@ export function setGsbToken(token: string): void {
  */
 export function getGsbToken(): string {
   if (!_token) {
-    throw new Error('GSB Token not set');
+    console.warn('GSB Token not set - using fallback for development');
+    return process.env.NODE_ENV === 'development'
+      ? 'dev-fallback-token'
+      : throwError('GSB Token not set');
   }
   return _token;
 }
@@ -41,7 +44,8 @@ export function setGsbTenantCode(tenantCode: string): void {
  */
 export function getGsbTenantCode(): string {
   if (!_tenantCode) {
-    throw new Error('GSB Tenant Code not set');
+    console.warn('GSB Tenant Code not set - using default from env');
+    return process.env.NEXT_PUBLIC_DEFAULT_TENANT_CODE || 'apexbase';
   }
   return _tenantCode;
 }
@@ -54,16 +58,21 @@ export function clearGsbAuth(): void {
   _tenantCode = null;
 }
 
+// Helper for error throwing
+function throwError(message: string): never {
+  throw new Error(message);
+}
+
 /**
  * GSB Environment Configuration
  */
 export const GSB_CONFIG = {
   // API
-  API_URL: 'https://dev1.gsbapps.net',  // Set to match the dev1 tenant
-  AUTH_URL: 'https://common.gsbapps.net',
+  API_URL: process.env.NEXT_PUBLIC_GSB_API_URL || 'https://dev1.gsbapps.net',
+  AUTH_URL: process.env.NEXT_PUBLIC_GSB_AUTH_URL || 'https://common.gsbapps.net',
 
   // Default tenant
-  DEFAULT_TENANT: 'dev1',
+  DEFAULT_TENANT: process.env.NEXT_PUBLIC_DEFAULT_TENANT_CODE || 'apexbase',
 
   // Function for extracting tenant code from token
   extractTenantCode: (token: string): string | undefined => {

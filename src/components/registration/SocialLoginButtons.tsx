@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { AuthService } from '@/lib/services/auth.service';
+import { AuthService } from '@/lib/gsb/services/auth/auth.service';
 
 export enum SocialProvider {
   Google = 'google',

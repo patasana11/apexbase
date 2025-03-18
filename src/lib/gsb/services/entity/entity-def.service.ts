@@ -1,10 +1,13 @@
-import { GsbEntityService } from '../gsb/services/gsb-entity.service';
-import { GsbSaveRequest } from '../gsb/types/requests';
-import { QueryParams } from '../gsb/types/query-params';
-import { QueryFunction } from '../gsb/types/query';
-import { getGsbToken, getGsbTenantCode } from '../config/gsb-config';
-import { GsbEntityDef, GsbProperty } from '../models/gsb-entity-def.model';
-import { setGsbCreateFields, setGsbUpdateFields, getGsbDateSortCols } from '../utils/gsb-utils';
+'use client';
+
+import { GsbEntityDef, GsbProperty } from '../../models/gsb-entity-def.model';
+import { GsbEntityService } from './gsb-entity.service';
+import { GsbSaveRequest } from '../../types/requests';
+import { QueryParams } from '../../types/query-params';
+import { QueryFunction } from '../../types/query';
+import { getGsbToken, getGsbTenantCode } from '../../config/gsb-config';
+import { setGsbCreateFields, setGsbUpdateFields, getGsbDateSortCols } from '../../utils/gsb-utils';
+
 
 /**
  * Service for managing Entity Definitions (Database Tables) in the application
@@ -54,19 +57,14 @@ export class EntityDefService {
 
       const query = new QueryParams<GsbEntityDef>(this.ENTITY_NAME);
 
+      const token = getGsbToken();
+      const tenantCode = getGsbTenantCode();
+
       // Set pagination
       query.startIndex = (page - 1) * pageSize;
       query.count = pageSize;
       query.calcTotalCount = true;
-
-      // Sort by lastUpdateDate
-      query.sortCols = getGsbDateSortCols();
-
-      console.log('Query params:', JSON.stringify(query));
-
-      const token = getGsbToken();
-      const tenantCode = getGsbTenantCode();
-
+      
       console.log('Using token:', token ? 'Token available' : 'No token');
       console.log('Using tenant code:', tenantCode);
 

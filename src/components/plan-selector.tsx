@@ -3,7 +3,7 @@
 import React from 'react';
 import { CheckIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { SubscriptionPlan } from '@/lib/services/paddle.service';
+import { SubscriptionPlan } from '@/lib/gsb/services/subscription/paddle.service';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 

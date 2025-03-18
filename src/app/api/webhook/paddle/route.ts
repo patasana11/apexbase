@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { SubscriptionService } from '@/lib/services/subscription.service';
+import { SubscriptionService } from '@/lib/gsb/services/subscription/subscription.service';
 
 export const POST = async (req: NextRequest) => {
   // Get the raw body of the request

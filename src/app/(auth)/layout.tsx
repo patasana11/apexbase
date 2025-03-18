@@ -1,8 +1,5 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
 import Link from "next/link";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -11,22 +8,6 @@ export default function AuthLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { data: session, status } = useSession();
-  const router = useRouter();
-
-  useEffect(() => {
-    // Only redirect if we're sure the user is authenticated
-    if (status === 'authenticated') {
-      router.replace('/dashboard');
-    }
-  }, [status, router]);
-
-  // Don't show loading state for initial page load
-  // This prevents flash of loading state
-  if (status === 'loading') {
-    return null;
-  }
-
   return (
     <div className="relative min-h-screen md:grid md:grid-cols-2 lg:grid-cols-3">
       {/* Left side - Auth Form */}
