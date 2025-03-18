@@ -2,13 +2,10 @@ import NextAuth from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import GitHubProvider from 'next-auth/providers/github';
 import CredentialsProvider from 'next-auth/providers/credentials';
-import { PrismaAdapter } from '@auth/prisma-adapter';
-import { prisma } from '@/lib/prisma';
 import { AuthService } from '@/lib/services/auth.service';
 import { logger } from '@/lib/logger';
 
 const handler = NextAuth({
-  adapter: PrismaAdapter(prisma),
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -60,9 +57,9 @@ const handler = NextAuth({
 
           logger.info('User authenticated successfully:', { email: credentials.email });
           return {
-            id: response.userData?.userId,
+            id: response.userData?.userId || credentials.email,
             email: credentials.email,
-            name: response.userData?.name,
+            name: response.userData?.name || credentials.email.split('@')[0],
             gsbToken: response.token,
             tokenExpiry: response.userData?.expireDate,
           };

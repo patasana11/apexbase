@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from 'next-auth/middleware';
 
+/**
+ * ApexBase Middleware
+ * 
+ * This middleware handles authentication and authorization for the application.
+ * The system uses GSB API exclusively as the backend, with NextAuth for authentication.
+ * NextAuth JWT strategy is used for session management, without a database adapter.
+ */
 export default withAuth(
   function middleware(req) {
     // Add GSB token to request headers if available
