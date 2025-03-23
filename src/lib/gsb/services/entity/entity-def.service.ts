@@ -154,6 +154,9 @@ export class EntityDefService {
    */
   async createEntityDef(entityDef: GsbEntityDef): Promise<string | null> {
     try {
+      // Validate entity definition has required properties
+      this.validateEntityDefProperties(entityDef);
+
       // Set defaults if not provided
       const newEntityDef: GsbEntityDef = {
         ...entityDef,
@@ -188,6 +191,113 @@ export class EntityDefService {
       console.error('Error creating entity definition:', error);
       return null;
     }
+  }
+
+  /**
+   * Validates that entity definition contains required properties (at least id and title)
+   * @param entityDef The entity definition to validate
+   * @throws Error if validation fails
+   */
+  private validateEntityDefProperties(entityDef: GsbEntityDef): void {
+    if (!entityDef.properties || entityDef.properties.length === 0) {
+      throw new Error('Entity definition must have at least id and title properties');
+    }
+
+    const hasIdProperty = entityDef.properties.some(prop => prop.name === 'id');
+    const hasTitleProperty = entityDef.properties.some(prop => prop.name === 'title');
+
+    if (!hasIdProperty || !hasTitleProperty) {
+      throw new Error('Entity definition must have at least id and title properties');
+    }
+  }
+
+  /**
+   * Get default properties for a new entity definition
+   * @param defName The name of the entity definition
+   * @returns Array of default GsbProperty objects
+   */
+  getDefaultProperties(defName: string): GsbProperty[] {
+    return [
+      {
+        "name": "id",
+        "title": "Id",
+        "isSearchable": false,
+        "isUnique": true,
+        "isListed": false,
+        "isPrimaryKey": true,
+        "isIndexed": true,
+        "formModes": 263172,
+        "updateFormMode": 4,
+        "viewFormMode": 4,
+        "createFormMode": 4,
+        "definition_id": "5C0AA76F-9C32-4E7E-A4BC-B56E93877883",
+        "orderNumber": 0
+      },
+      {
+        "name": "title",
+        "title": "Title",
+        "isRequired": false,
+        "isSearchable": true,
+        "isMultiLingual": true,
+        "listScreens": 7,
+        "definition_id": "C6C34BF3-F51B-4E69-A689-B09847BE74B9",
+        "formModes": 66049,
+        "updateFormMode": 1,
+        "viewFormMode": 2,
+        "createFormMode": 1,
+        "orderNumber": 2
+      },
+      {
+        "name": "createdBy",
+        "title": "Created By",
+        "listScreens": 7,
+        "formModes": 262658,
+        "updateFormMode": 2,
+        "viewFormMode": 2,
+        "createFormMode": 4,
+        "definition_id": "924ACBA8-58C5-4881-940D-472EC01EBA5F",
+        "refType": "OneToMany",
+        "refEntPropName": ("created" + defName),
+        "refEntDef_id": "98CDC0E8-58D6-4923-B22E-591430E52606",
+        "orderNumber": 3
+      },
+      {
+        "name": "lastUpdatedBy",
+        "title": "Last Updated By",
+        "isListed": false,
+        "formModes": 262658,
+        "updateFormMode": 2,
+        "viewFormMode": 2,
+        "createFormMode": 4,
+        "definition_id": "924ACBA8-58C5-4881-940D-472EC01EBA5F",
+        "refType": "OneToMany",
+        "refEntPropName": ("updated" + defName),
+        "refEntDef_id": "98CDC0E8-58D6-4923-B22E-591430E52606",
+        "orderNumber": 4
+      },
+      {
+        "name": "lastUpdateDate",
+        "title": "Last Update Date",
+        "isListed": false,
+        "formModes": 262658,
+        "updateFormMode": 2,
+        "viewFormMode": 2,
+        "createFormMode": 4,
+        "definition_id": "12E647E0-EBD2-4EC2-A4E3-82C1DFE07DA2",
+        "orderNumber": 5
+      },
+      {
+        "name": "createDate",
+        "title": "Create Date",
+        "listScreens": 7,
+        "formModes": 262658,
+        "updateFormMode": 2,
+        "viewFormMode": 2,
+        "createFormMode": 4,
+        "definition_id": "12E647E0-EBD2-4EC2-A4E3-82C1DFE07DA2",
+        "orderNumber": 6
+      }
+    ];
   }
 
   /**

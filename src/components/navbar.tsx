@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ClientNavigationLink } from "./client-navigation-link";
 import {
   FiChevronDown,
@@ -20,13 +21,30 @@ import {
 import { Button } from "./ui/button";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
+import { useAuth } from "./auth-context";
 
 export function Navbar() {
   const [isOpen, setIsOpen] = React.useState(false);
+  const { isAuthenticated, status } = useAuth();
+  const router = useRouter();
 
   // Handle client-side navigation transitions
   const handleNavigation = () => {
     // Comment out navigation tracking to prevent auth errors
+  };
+
+  // Navigate to dashboard if authenticated, otherwise to login
+  const handleSignIn = () => {
+    if (isAuthenticated) {
+      router.push('/dashboard');
+    } else {
+      router.push('/login');
+    }
+  };
+
+  // Navigate to registration for getting started
+  const handleGetStarted = () => {
+    router.push('/register');
   };
 
   const features = [
@@ -131,11 +149,16 @@ export function Navbar() {
         <div className="flex items-center gap-2">
           <ThemeToggle />
           <div className="hidden md:flex md:gap-2">
-            <Button variant="ghost" disabled>
-              Sign In (Coming Soon)
+            <Button 
+              variant="ghost"
+              onClick={handleSignIn}
+            >
+              {isAuthenticated ? 'Dashboard' : 'Sign In'}
             </Button>
-            <Button disabled>
-              Get Started (Coming Soon)
+            <Button
+              onClick={handleGetStarted}
+            >
+              Get Started
             </Button>
           </div>
           <Sheet>
@@ -200,11 +223,16 @@ export function Navbar() {
                     About
                   </ClientNavigationLink>
                   <div className="flex flex-col gap-2 pt-4">
-                    <Button variant="ghost" disabled>
-                      Sign In (Coming Soon)
+                    <Button 
+                      variant="ghost"
+                      onClick={handleSignIn}
+                    >
+                      {isAuthenticated ? 'Dashboard' : 'Sign In'}
                     </Button>
-                    <Button disabled>
-                      Get Started (Coming Soon)
+                    <Button
+                      onClick={handleGetStarted}
+                    >
+                      Get Started
                     </Button>
                   </div>
                 </div>

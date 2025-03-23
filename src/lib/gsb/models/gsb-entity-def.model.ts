@@ -16,12 +16,6 @@ export interface GsbEntityDef {
   createdBy_id?: string;
   lastUpdatedBy_id?: string;
   permissions?: {
-    allowCreate?: boolean;
-    allowRead?: boolean;
-    allowUpdate?: boolean;
-    allowDelete?: boolean;
-    readRoles?: string[];
-    writeRoles?: string[];
   };
 }
 
@@ -31,6 +25,7 @@ export interface GsbEntityDef {
 export interface GsbProperty {
   id?: string;
   name: string;
+  title?: string;
   definition_id: string;
   isRequired?: boolean;
   isIndexed?: boolean;
@@ -39,6 +34,8 @@ export interface GsbProperty {
   isUnique?: boolean;
   isEncrypted?: boolean;
   isSearchable?: boolean;
+  isListed?: boolean;
+  isMultiLingual?: boolean;
   maxLength?: number;
   scale?: number;
   defaultValue?: any;
@@ -46,4 +43,10 @@ export interface GsbProperty {
   refEntDef_id?: string;
   refEntPropName?: string;
   cascadeReference?: boolean;
+  formModes?: number;
+  updateFormMode?: number;
+  viewFormMode?: number;
+  createFormMode?: number;
+  listScreens?: number;
+  orderNumber?: number;
 }
