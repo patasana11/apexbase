@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -77,10 +77,13 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import debounce from "lodash/debounce";
+import { LoaderCircle } from "lucide-react";
 
 // Form schemas for each step
 const basicInfoSchema = z.object({
-  name: z.string().min(1, "Name is required").max(64),
+  name: z.string().min(1, "Name is required").max(64)
+    .regex(/^[A-Za-z][A-Za-z0-9]*$/, "Name must start with a letter and contain only letters and numbers"),
   title: z.string().min(1, "Title is required").max(128),
   description: z.string().max(500),
   publicAccess: z.boolean().default(false),
@@ -238,11 +241,108 @@ function PropertyEditModal({
     }
   }, [selectedRefEntity, propertyData.type, tables, refEntityPropName]);
 
+  // Add state for reference property name validation
+  const [isRefPropNameValid, setIsRefPropNameValid] = useState(true);
+  const [refPropNameValidationMessage, setRefPropNameValidationMessage] = useState("");
+  const [isCheckingRefPropName, setIsCheckingRefPropName] = useState(false);
+  const refPropNameCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Check if reference property name is already used in the referenced entity
+  const checkRefPropNameUniqueness = useCallback((refPropName: string, refEntityId: string) => {
+    if (!refPropName || !refEntityId) {
+      setIsRefPropNameValid(true);
+      setRefPropNameValidationMessage("");
+      setIsCheckingRefPropName(false);
+      return;
+    }
+    
+    // Set loading state
+    setIsCheckingRefPropName(true);
+    
+    // Cancel any previous timeout
+    if (refPropNameCheckTimeoutRef.current) {
+      clearTimeout(refPropNameCheckTimeoutRef.current);
+      refPropNameCheckTimeoutRef.current = null;
+    }
+    
+    // Set a new timeout
+    refPropNameCheckTimeoutRef.current = setTimeout(async () => {
+      try {
+        const entityDefService = new EntityDefService();
+        
+        // Get the entity definition with properties
+        const entityDef = await entityDefService.getEntityDefById(refEntityId);
+        
+        if (entityDef && entityDef.properties) {
+          // Check if the property name already exists in the referenced entity
+          const propExists = entityDef.properties.some(prop => 
+            prop.name?.toLowerCase() === refPropName.toLowerCase()
+          );
+          
+          setIsRefPropNameValid(!propExists);
+          
+          if (propExists) {
+            setRefPropNameValidationMessage(`Property name "${refPropName}" already exists in the referenced entity.`);
+          } else {
+            setRefPropNameValidationMessage("");
+          }
+        }
+      } catch (error) {
+        console.error("Error checking reference property name:", error);
+        // Default to valid if we can't check
+        setIsRefPropNameValid(true);
+        setRefPropNameValidationMessage("");
+      } finally {
+        setIsCheckingRefPropName(false);
+      }
+    }, 300); // 300ms debounce
+  }, []);
+  
+  // Clean up timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (refPropNameCheckTimeoutRef.current) {
+        clearTimeout(refPropNameCheckTimeoutRef.current);
+        refPropNameCheckTimeoutRef.current = null;
+      }
+    };
+  }, []);
+  
+  // Add handler for reference property name changes
+  const handleRefPropNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setRefEntityPropName(value);
+    
+    if (value && selectedRefEntity) {
+      checkRefPropNameUniqueness(value, selectedRefEntity);
+    }
+  };
+
+  // Validate on selectedRefEntity change
+  useEffect(() => {
+    if (refEntityPropName && selectedRefEntity) {
+      checkRefPropNameUniqueness(refEntityPropName, selectedRefEntity);
+    }
+  }, [selectedRefEntity, checkRefPropNameUniqueness, refEntityPropName]);
+
   const handleSubmit = () => {
     // Prepare final property data with reference fields if needed
     let finalProperty = { ...propertyData };
     
     if (finalProperty.type === "Reference") {
+      // Validate reference property name before saving
+      if (!isRefPropNameValid) {
+        // Show error toast instead of saving
+        const toast = document.createEvent('CustomEvent');
+        toast.initCustomEvent('toast', true, true, {
+          title: "Invalid Reference Property Name",
+          description: refPropNameValidationMessage,
+          variant: "destructive",
+        });
+        document.dispatchEvent(toast);
+        return;
+      }
+      
       finalProperty.reference = selectedRefEntity;
       finalProperty.refType = selectedRefType;
       finalProperty.refEntPropName = refEntityPropName;
@@ -519,8 +619,9 @@ function PropertyEditModal({
                   <Input
                     id="refPropName"
                     value={refEntityPropName}
-                    onChange={(e) => setRefEntityPropName(e.target.value)}
+                    onChange={handleRefPropNameChange}
                     placeholder="e.g., customerOrders"
+                    className={!isRefPropNameValid ? "border-red-500" : ""}
                   />
                   <Button 
                     variant="outline" 
@@ -532,6 +633,7 @@ function PropertyEditModal({
                         if (entity) {
                           const refName = entity.name.charAt(0).toLowerCase() + entity.name.slice(1);
                           setRefEntityPropName(refName);
+                          checkRefPropNameUniqueness(refName, selectedRefEntity);
                         }
                       }
                     }}
@@ -539,6 +641,21 @@ function PropertyEditModal({
                     Auto-generate
                   </Button>
                 </div>
+                {/* Show validation message or loading state */}
+                {(refPropNameValidationMessage || isCheckingRefPropName) && (
+                  <div className="flex items-center mt-1 text-sm">
+                    {isCheckingRefPropName ? (
+                      <>
+                        <LoaderCircle className="w-3 h-3 mr-1 animate-spin" />
+                        <span className="text-muted-foreground">Checking property name availability...</span>
+                      </>
+                    ) : (
+                      <span className={!isRefPropNameValid ? "text-red-500" : "text-muted-foreground"}>
+                        {refPropNameValidationMessage}
+                      </span>
+                    )}
+                  </div>
+                )}
                 <p className="text-xs text-muted-foreground mt-1">
                   This is the property name used in the referenced entity.
                 </p>
@@ -671,7 +788,10 @@ function PropertyEditModal({
         
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleSubmit} disabled={!propertyData.name || (propertyData.type === "Reference" && !selectedRefEntity)}>
+          <Button 
+            onClick={handleSubmit} 
+            disabled={!propertyData.name || (propertyData.type === "Reference" && (!selectedRefEntity || !isRefPropNameValid))}
+          >
             {isEditing ? "Update Property" : "Add Property"}
           </Button>
         </DialogFooter>
@@ -691,6 +811,12 @@ export default function NewDataTablePage() {
   const [title, setTitle] = useState("");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [dbTableName, setDbTableName] = useState("");
+  const [isNameUnique, setIsNameUnique] = useState(true);
+  const [isDbTableNameUnique, setIsDbTableNameUnique] = useState(true);
+  const [isNameValid, setIsNameValid] = useState(true);
+  const [nameValidationMessage, setNameValidationMessage] = useState("");
+  const [isCheckingUniqueness, setIsCheckingUniqueness] = useState(false);
   const [selectedRefEntity, setSelectedRefEntity] = useState<string>("");
   const [refEntityPropName, setRefEntityPropName] = useState<string>("");
   const [selectedRefType, setSelectedRefType] = useState<RefType>(RefType.OneToMany);
@@ -699,6 +825,15 @@ export default function NewDataTablePage() {
     type: "String",
     required: false,
   });
+  
+  // Create a ref to store the timeout ID
+  const nameCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Create state and ref for reference property name validation
+  const [isRefPropNameValid, setIsRefPropNameValid] = useState(true);
+  const [refPropNameValidationMessage, setRefPropNameValidationMessage] = useState("");
+  const [isCheckingRefPropName, setIsCheckingRefPropName] = useState(false);
+  const refPropNameCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Property edit modal state
   const [isPropertyModalOpen, setIsPropertyModalOpen] = useState(false);
@@ -822,7 +957,6 @@ export default function NewDataTablePage() {
     defaultValues: {
       name: "",
       title: "",
-      description: "",
       publicAccess: false,
       activityLogLevel: ActivityLogLevel.None,
     },
@@ -859,16 +993,296 @@ export default function NewDataTablePage() {
     loadTables();
   }, []);
 
-  // Auto-generate Pascal case name from title
-  useEffect(() => {
-    if (title && !name) {
-      const pascalCase = title
-        .split(" ")
-        .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-        .join("");
-      setName(pascalCase);
+  // Convert string to Pascal case and remove special characters
+  const toPascalCase = (str: string): string => {
+    if (!str) return "";
+    
+    // Remove special characters and spaces, keeping only alphanumeric
+    return str
+      .split(/[^a-zA-Z0-9]/) // Split by non-alphanumeric characters
+      .filter(Boolean) // Remove empty strings
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()) // Convert to Pascal case
+      .join("");
+  };
+
+  // Validate if name follows the required pattern
+  const validateName = (name: string): boolean => {
+    // Must start with a letter and contain only letters and numbers
+    const namePattern = /^[A-Za-z][A-Za-z0-9]*$/;
+    return namePattern.test(name);
+  };
+  
+  // Handle name uniqueness check with manual debounce implementation
+  const checkNameUniqueness = useCallback((nameToCheck: string) => {
+    if (!nameToCheck) {
+      setIsNameUnique(true);
+      setIsDbTableNameUnique(true);
+      setIsCheckingUniqueness(false);
+      return;
     }
-  }, [title]);
+    
+    // Set loading state
+    setIsCheckingUniqueness(true);
+    
+    // Cancel any previous timeout
+    if (nameCheckTimeoutRef.current) {
+      clearTimeout(nameCheckTimeoutRef.current);
+      nameCheckTimeoutRef.current = null;
+    }
+    
+    // Set a new timeout
+    nameCheckTimeoutRef.current = setTimeout(async () => {
+      try {
+        const entityDefService = new EntityDefService();
+        
+        // Use the specialized method that only selects name and dbTableName fields
+        const { entityDefs } = await entityDefService.checkNameUniqueness(nameToCheck);
+        
+        // Check name uniqueness
+        const nameExists = entityDefs.some(def => 
+          def.name?.toLowerCase() === nameToCheck.toLowerCase()
+        );
+        setIsNameUnique(!nameExists);
+        
+        // Check dbTableName uniqueness
+        const dbTableNameToCheck = nameToCheck;
+        const dbTableNameExists = entityDefs.some(def => 
+          def.dbTableName?.toLowerCase() === dbTableNameToCheck.toLowerCase()
+        );
+        setIsDbTableNameUnique(!dbTableNameExists);
+        
+        // If dbTableName is not unique but name is, generate a unique dbTableName
+        if (dbTableNameExists && !nameExists) {
+          let suffix = 1;
+          let uniqueDbTableName = `${dbTableNameToCheck}${suffix}`;
+          
+          // Find a unique dbTableName by adding a number suffix
+          while (entityDefs.some(def => def.dbTableName?.toLowerCase() === uniqueDbTableName.toLowerCase())) {
+            suffix++;
+            uniqueDbTableName = `${dbTableNameToCheck}${suffix}`;
+          }
+          
+          setDbTableName(uniqueDbTableName);
+        } else if (!dbTableNameExists) {
+          setDbTableName(nameToCheck);
+        }
+        
+        // Update validation message
+        if (nameExists) {
+          setNameValidationMessage("This name is already taken.");
+        } else if (!isNameValid) {
+          setNameValidationMessage("Name must start with a letter and contain only letters and numbers.");
+        } else {
+          setNameValidationMessage("");
+        }
+      } catch (error) {
+        console.error("Error checking name uniqueness:", error);
+      } finally {
+        setIsCheckingUniqueness(false);
+      }
+    }, 300); // 300ms debounce for better responsiveness
+  }, [isNameValid]);
+
+  // Reset check timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (nameCheckTimeoutRef.current) {
+        clearTimeout(nameCheckTimeoutRef.current);
+        nameCheckTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  // Handle name input losing focus
+  const handleNameBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    
+    // Validate name format
+    const isValid = validateName(value);
+    setIsNameValid(isValid);
+    
+    if (isValid && value) {
+      // Force immediate check by canceling any pending timeouts
+      if (nameCheckTimeoutRef.current) {
+        clearTimeout(nameCheckTimeoutRef.current);
+        nameCheckTimeoutRef.current = null;
+      }
+      checkNameUniqueness(value);
+    } else if (!isValid) {
+      setNameValidationMessage("Name must start with a letter and contain only letters and numbers.");
+    }
+  };
+
+  // Handle name input focus
+  const handleNameFocus = () => {
+    // Clear error messages when user starts editing
+    if (!isNameValid || !isNameUnique) {
+      setNameValidationMessage("");
+    }
+  };
+
+  // Check if reference property name is already used in the referenced entity
+  const checkRefPropNameUniqueness = useCallback((refPropName: string, refEntityId: string) => {
+    if (!refPropName || !refEntityId) {
+      setIsRefPropNameValid(true);
+      setRefPropNameValidationMessage("");
+      setIsCheckingRefPropName(false);
+      return;
+    }
+    
+    // Set loading state
+    setIsCheckingRefPropName(true);
+    
+    // Cancel any previous timeout
+    if (refPropNameCheckTimeoutRef.current) {
+      clearTimeout(refPropNameCheckTimeoutRef.current);
+      refPropNameCheckTimeoutRef.current = null;
+    }
+    
+    // Set a new timeout
+    refPropNameCheckTimeoutRef.current = setTimeout(async () => {
+      try {
+        const entityDefService = new EntityDefService();
+        
+        // Get the entity definition with properties
+        const entityDef = await entityDefService.getEntityDefById(refEntityId);
+        
+        if (entityDef && entityDef.properties) {
+          // Check if the property name already exists in the referenced entity
+          const propExists = entityDef.properties.some(prop => 
+            prop.name?.toLowerCase() === refPropName.toLowerCase()
+          );
+          
+          setIsRefPropNameValid(!propExists);
+          
+          if (propExists) {
+            setRefPropNameValidationMessage(`Property name "${refPropName}" already exists in the referenced entity.`);
+          } else {
+            setRefPropNameValidationMessage("");
+          }
+        }
+      } catch (error) {
+        console.error("Error checking reference property name:", error);
+        // Default to valid if we can't check
+        setIsRefPropNameValid(true);
+        setRefPropNameValidationMessage("");
+      } finally {
+        setIsCheckingRefPropName(false);
+      }
+    }, 300); // 300ms debounce
+  }, []);
+
+  // Add a handler for reference property name input
+  const handleRefPropNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setRefEntityPropName(value);
+    
+    if (value && selectedRefEntity) {
+      checkRefPropNameUniqueness(value, selectedRefEntity);
+    }
+  };
+  
+  // Add a blur handler for reference property name
+  const handleRefPropNameBlur = () => {
+    if (refEntityPropName && selectedRefEntity) {
+      // Force immediate check
+      if (refPropNameCheckTimeoutRef.current) {
+        clearTimeout(refPropNameCheckTimeoutRef.current);
+        refPropNameCheckTimeoutRef.current = null;
+      }
+      checkRefPropNameUniqueness(refEntityPropName, selectedRefEntity);
+    }
+  };
+  
+  // Check reference property name when selectedRefEntity changes
+  useEffect(() => {
+    if (refEntityPropName && selectedRefEntity) {
+      checkRefPropNameUniqueness(refEntityPropName, selectedRefEntity);
+    }
+  }, [selectedRefEntity, checkRefPropNameUniqueness, refEntityPropName]);
+
+  // Handle title input losing focus
+  const handleTitleBlur = () => {
+    if (title) {
+      // Generate name from title on blur if name isn't manually set yet
+      const pascalCaseName = toPascalCase(title);
+      setName(pascalCaseName);
+      
+      // Validate the generated name immediately
+      const isValid = validateName(pascalCaseName);
+      setIsNameValid(isValid);
+      
+      if (isValid) {
+        // Force immediate check by canceling any pending timeouts
+        if (nameCheckTimeoutRef.current) {
+          clearTimeout(nameCheckTimeoutRef.current);
+          nameCheckTimeoutRef.current = null;
+        }
+        checkNameUniqueness(pascalCaseName);
+      } else {
+        setNameValidationMessage("Name must start with a letter and contain only letters and numbers.");
+      }
+    }
+  };
+
+  // Handle title input focus
+  const handleTitleFocus = () => {
+    // Reset any validation messages related to the title
+    if (!isNameValid && !name) {
+      setNameValidationMessage("");
+    }
+  };
+
+  // Auto-generate Pascal case name from title when title changes
+  useEffect(() => {
+    // Only run this effect if title has value and name is empty
+    if (title && !name) {
+      const pascalCaseName = toPascalCase(title);
+      setName(pascalCaseName);
+      
+      // Validate the generated name
+      const isValid = validateName(pascalCaseName);
+      setIsNameValid(isValid);
+      
+      if (isValid) {
+        // Check uniqueness
+        // Cancel any previous check first
+        if (nameCheckTimeoutRef.current) {
+          clearTimeout(nameCheckTimeoutRef.current);
+          nameCheckTimeoutRef.current = null;
+        }
+        checkNameUniqueness(pascalCaseName);
+      } else {
+        setNameValidationMessage("Name must start with a letter and contain only letters and numbers.");
+      }
+    }
+  }, [title, checkNameUniqueness, name]); // Include name in dependencies to prevent unwanted updates
+  
+  // When name changes, update dbTableName and check uniqueness
+  useEffect(() => {
+    if (name) {
+      // Validate name format
+      const isValid = validateName(name);
+      setIsNameValid(isValid);
+      
+      if (isValid) {
+        // Check uniqueness - our more robust implementation will handle this with debouncing
+        // Cancel existing timeout first to prevent duplicate calls
+        if (nameCheckTimeoutRef.current) {
+          clearTimeout(nameCheckTimeoutRef.current);
+          nameCheckTimeoutRef.current = null;
+        }
+        checkNameUniqueness(name);
+      } else {
+        setNameValidationMessage("Name must start with a letter and contain only letters and numbers.");
+      }
+    } else {
+      setIsNameValid(true);
+      setIsNameUnique(true);
+      setIsDbTableNameUnique(true);
+      setNameValidationMessage("");
+    }
+  }, [name, checkNameUniqueness]);
 
   // Handle reference prop name generation
   useEffect(() => {
@@ -920,31 +1334,6 @@ export default function NewDataTablePage() {
     }
   };
 
-  const addProperty = () => {
-    if (newProperty.name && newProperty.type) {
-      const propToAdd = {...newProperty};
-      
-      // If it's a reference type, add the reference fields
-      if (propToAdd.type === "Reference" && selectedRefEntity) {
-        propToAdd.reference = selectedRefEntity;
-        propToAdd.refType = selectedRefType;
-        propToAdd.refEntPropName = refEntityPropName;
-      }
-      
-      setProperties([...properties, propToAdd]);
-      
-      // Reset form
-      setNewProperty({
-        name: "",
-        type: "String",
-        required: false,
-      });
-      setSelectedRefEntity("");
-      setRefEntityPropName("");
-      setSelectedRefType(RefType.OneToMany);
-    }
-  };
-
   const removeProperty = (index: number) => {
     const propertyToRemove = properties[index];
     
@@ -961,9 +1350,83 @@ export default function NewDataTablePage() {
     setProperties(properties.filter((_, i) => i !== index));
   };
 
+  const addProperty = () => {
+    // Validate that we have the minimum required properties
+    if (!newProperty.name || !newProperty.type) {
+      toast({
+        title: "Missing required fields",
+        description: "Property name and type are required.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Additional validation for Reference types
+    if (newProperty.type === "Reference") {
+      if (!selectedRefEntity) {
+        toast({
+          title: "Missing reference entity",
+          description: "You must select a referenced entity.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Validate the reference property name if a referenced entity is selected
+      if (selectedRefEntity && !isRefPropNameValid) {
+        toast({
+          title: "Invalid reference property name",
+          description: refPropNameValidationMessage || "The reference property name is not valid.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Add the reference entity and type to the property
+      const propertyToAdd = {
+        ...newProperty,
+        reference: selectedRefEntity,
+        refType: selectedRefType,
+        refEntPropName: refEntityPropName,
+      };
+      
+      setProperties([...properties, propertyToAdd]);
+    } else {
+      // For non-reference types, just add the property
+      setProperties([...properties, newProperty]);
+    }
+    
+    // Reset the form
+    setNewProperty({
+      name: "",
+      type: "",
+      description: "",
+      required: false,
+      cascadeReference: false,
+    });
+    setSelectedRefEntity("");
+    setSelectedRefType(RefType.OneToMany);
+    setRefEntityPropName("");
+    setIsRefPropNameValid(true);
+    setRefPropNameValidationMessage("");
+  };
+
   const handleSubmit = async () => {
     try {
       setIsLoading(true);
+      
+      // Check if name is valid and unique
+      if (!isNameValid) {
+        throw new Error('Name must start with a letter and contain only letters and numbers');
+      }
+      
+      if (!isNameUnique) {
+        throw new Error('Entity name is already taken');
+      }
+      
+      if (!isDbTableNameUnique) {
+        throw new Error('Database table name is already taken');
+      }
       
       const entityDefService = new EntityDefService();
       
@@ -1026,6 +1489,7 @@ export default function NewDataTablePage() {
         title,
         name,
         description,
+        dbTableName: dbTableName || name, // Use the dbTableName if set, otherwise use name
         properties: mappedProperties,
         publicAccess: basicInfoForm.getValues().publicAccess,
         activityLogLevel: basicInfoForm.getValues().activityLogLevel,
@@ -1114,6 +1578,8 @@ export default function NewDataTablePage() {
               id="title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              onFocus={handleTitleFocus}
+              onBlur={handleTitleBlur}
               placeholder="e.g., Customer Profile"
             />
             <p className="text-sm text-muted-foreground">
@@ -1122,15 +1588,44 @@ export default function NewDataTablePage() {
           </div>
           
           <div className="space-y-2">
-            <UILabel htmlFor="name">Name (PascalCase)</UILabel>
+            <UILabel htmlFor="name" className="flex items-center justify-between">
+              <span>Name (PascalCase)</span>
+              {isCheckingUniqueness && (
+                <span className="text-sm text-muted-foreground flex items-center">
+                  <LoaderCircle className="animate-spin mr-1 h-3 w-3" />
+                  Checking availability...
+                </span>
+              )}
+            </UILabel>
             <Input
               id="name"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value;
+                setName(value);
+              }}
+              onFocus={handleNameFocus}
+              onBlur={handleNameBlur}
               placeholder="e.g., CustomerProfile"
+              className={(!isNameValid || !isNameUnique) ? "border-red-500" : ""}
             />
+            {/* Validation message display */}
+            {(nameValidationMessage || isCheckingUniqueness) && (
+              <div className="flex items-center mt-1 text-sm">
+                {isCheckingUniqueness ? (
+                  <>
+                    <LoaderCircle className="w-3 h-3 mr-1 animate-spin" />
+                    <span className="text-muted-foreground">Checking name uniqueness...</span>
+                  </>
+                ) : (
+                  <span className={!isNameValid || !isNameUnique ? "text-red-500" : "text-muted-foreground"}>
+                    {nameValidationMessage}
+                  </span>
+                )}
+              </div>
+            )}
             <p className="text-sm text-muted-foreground">
-              The internal name for this data table. Should be in PascalCase without spaces.
+              A unique identifier for this data table used in API calls.
             </p>
           </div>
           
@@ -1356,8 +1851,10 @@ export default function NewDataTablePage() {
                     <Input
                       id="refPropName"
                       value={refEntityPropName}
-                      onChange={(e) => setRefEntityPropName(e.target.value)}
+                      onChange={handleRefPropNameChange}
+                      onBlur={handleRefPropNameBlur}
                       placeholder="e.g., customerOrders"
+                      className={!isRefPropNameValid ? "border-red-500" : ""}
                     />
                     <Button 
                       variant="outline" 
@@ -1369,6 +1866,7 @@ export default function NewDataTablePage() {
                           if (entity) {
                             const refName = entity.name.charAt(0).toLowerCase() + entity.name.slice(1);
                             setRefEntityPropName(refName);
+                            checkRefPropNameUniqueness(refName, selectedRefEntity);
                           }
                         }
                       }}
@@ -1376,8 +1874,38 @@ export default function NewDataTablePage() {
                       Auto-generate
                     </Button>
                   </div>
+                  {/* Show validation message or loading state */}
+                  {(refPropNameValidationMessage || isCheckingRefPropName) && (
+                    <div className="flex items-center mt-1 text-sm">
+                      {isCheckingRefPropName ? (
+                        <>
+                          <LoaderCircle className="w-3 h-3 mr-1 animate-spin" />
+                          <span className="text-muted-foreground">Checking property name availability...</span>
+                        </>
+                      ) : (
+                        <span className={!isRefPropNameValid ? "text-red-500" : "text-muted-foreground"}>
+                          {refPropNameValidationMessage}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   <p className="text-xs text-muted-foreground mt-1">
                     This is the property name used in the referenced entity. For example, if this is "customer" entity and you're referencing "orders", this might be "customerOrders".
+                  </p>
+                </div>
+                
+                <div className="col-span-2">
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      checked={newProperty.cascadeReference}
+                      onCheckedChange={(checked: boolean) =>
+                        setNewProperty({ ...newProperty, cascadeReference: checked })
+                      }
+                    />
+                    <UILabel>Cascade Reference</UILabel>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    When enabled, deleting a record will also delete or update referenced records.
                   </p>
                 </div>
               </div>

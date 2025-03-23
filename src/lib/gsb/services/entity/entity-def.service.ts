@@ -436,6 +436,50 @@ export class EntityDefService {
       return null;
     }
   }
+
+  /**
+   * Check uniqueness of name and dbTableName
+   * @param nameToCheck The name to check for uniqueness
+   * @returns Matching entity defs with only name and dbTableName fields
+   */
+  async checkNameUniqueness(
+    nameToCheck: string
+  ): Promise<{ entityDefs: Pick<GsbEntityDef, 'name' | 'dbTableName' | 'id'>[]; totalCount: number }> {
+    try {
+      console.log(`Checking uniqueness for: "${nameToCheck}"`);
+
+      const query = new QueryParams<GsbEntityDef>(this.ENTITY_NAME);
+
+      // Set search filter
+      if (nameToCheck) {
+        query.filter = nameToCheck;
+      }
+
+      // Only select name and dbTableName fields for efficiency
+      query.select(['name', 'dbTableName', 'id']);
+      
+      // Set pagination - only need a few results
+      query.startIndex = 0;
+      query.count = 20;
+      query.calcTotalCount = true;
+
+      console.log('Uniqueness check query params:', JSON.stringify(query));
+
+      const response = await this.entityService.query(
+        query,
+        getGsbToken(),
+        getGsbTenantCode()
+      );
+
+      return {
+        entityDefs: (response.entities || []) as Pick<GsbEntityDef, 'name' | 'dbTableName' | 'id'>[],
+        totalCount: response.totalCount || 0
+      };
+    } catch (error) {
+      console.error('Error checking name uniqueness:', error);
+      return { entityDefs: [], totalCount: 0 };
+    }
+  }
 }
 
 /**

@@ -803,8 +803,7 @@ export default function NewDataTablePage() {
     resolver: zodResolver(basicInfoSchema),
     defaultValues: {
       name: "",
-      title: "",
-      description: "",
+      title: ""
     },
   });
 
