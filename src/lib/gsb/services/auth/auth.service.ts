@@ -69,7 +69,7 @@ export class AuthService {
   /**
    * Initialize auth state from localStorage if available
    */
-  private initFromStorage(): void {
+  public initFromStorage(): void {
     if (typeof window !== 'undefined') {
       try {
         const commonToken = localStorage.getItem(COMMON_TOKEN_STORAGE_KEY);
@@ -138,6 +138,23 @@ export class AuthService {
           localStorage.setItem(TENANT_STORAGE_KEY, tenantCode);
           localStorage.setItem(USER_DATA_STORAGE_KEY, JSON.stringify(userData));
         }
+        
+        // Set cookies for middleware to use
+        // Calculate expiry (30 days for remember, session otherwise)
+        const expiry = remember ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : undefined;
+        
+        // Set common token cookie
+        document.cookie = `${COMMON_TOKEN_STORAGE_KEY}=${commonToken}; path=/; ${expiry ? `expires=${expiry.toUTCString()};` : ''} SameSite=Lax`;
+        
+        // Set user token cookie if available
+        if (userToken) {
+          document.cookie = `${USER_TOKEN_STORAGE_KEY}=${userToken}; path=/; ${expiry ? `expires=${expiry.toUTCString()};` : ''} SameSite=Lax`;
+        }
+        
+        // Save token expiry data for validation
+        if (userData && userData.expireDate) {
+          document.cookie = `gsb_token_expiry=${userData.expireDate}; path=/; ${expiry ? `expires=${expiry.toUTCString()};` : ''} SameSite=Lax`;
+        }
       } catch (error) {
         console.error('Error saving auth data to storage:', error);
       }
@@ -160,6 +177,11 @@ export class AuthService {
         sessionStorage.removeItem(USER_TOKEN_STORAGE_KEY);
         sessionStorage.removeItem(TENANT_STORAGE_KEY);
         sessionStorage.removeItem(USER_DATA_STORAGE_KEY);
+        
+        // Clear cookies
+        document.cookie = `${COMMON_TOKEN_STORAGE_KEY}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
+        document.cookie = `${USER_TOKEN_STORAGE_KEY}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
+        document.cookie = `gsb_token_expiry=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
       } catch (error) {
         console.error('Error clearing storage:', error);
       }
@@ -175,8 +197,30 @@ export class AuthService {
     if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_SKIP_GSB_AUTH === 'true') {
       return true;
     }
-    // User is authenticated if they have at least a common token
-    return !!this.commonToken;
+    
+    // Get the token and check if it exists
+    const token = this.getToken();
+    if (!token) {
+      return false;
+    }
+    
+    // Check token expiry
+    try {
+      // Get user data to check expiry
+      const userData = this.getCurrentUser();
+      if (!userData || !userData.expireDate) {
+        return false;
+      }
+      
+      // Check if token is expired
+      const expiryDate = new Date(userData.expireDate);
+      const now = new Date();
+      
+      return expiryDate > now;
+    } catch (error) {
+      console.error('Error checking token expiry:', error);
+      return false;
+    }
   }
 
   /**

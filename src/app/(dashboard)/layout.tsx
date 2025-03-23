@@ -78,6 +78,7 @@ export default function DashboardLayout({
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const router = useRouter();
   const prefetchedRoutesRef = useRef<boolean>(false);
+  const { logout } = useAuth();
 
   // Prefetch common routes for better navigation
   useEffect(() => {
@@ -103,6 +104,15 @@ export default function DashboardLayout({
       router.prefetch(route);
     });
   }, [router]);
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      router.push('/');
+    } catch (error) {
+      console.error('Error during logout:', error);
+    }
+  };
 
   return (
     <AuthCheck>
@@ -368,7 +378,7 @@ export default function DashboardLayout({
                       </DropdownMenuItem>
                     </DropdownMenuGroup>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleLogout}>
                       <LogOut className="mr-2 h-4 w-4" />
                       <span>Log out</span>
                     </DropdownMenuItem>

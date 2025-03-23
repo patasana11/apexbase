@@ -2,6 +2,7 @@
 
 import React, { createContext, useState, useContext, useEffect, useRef, ReactNode } from 'react';
 import { AuthService } from '@/lib/gsb/services/auth/auth.service';
+import { AppInitializerService } from '@/lib/gsb/services/app-initializer.service';
 
 interface AuthState {
   isAuthenticated: boolean;
@@ -43,7 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [authState, setAuthState] = useState<AuthState>(initialState);
   const isInitializedRef = useRef(false);
 
-  // Initialize auth state from storage - but only once!
+  // Initialize auth state - but only once!
   useEffect(() => {
     // Skip initialization if already done
     if (isInitializedRef.current) {
@@ -52,15 +53,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const initAuth = () => {
       try {
-        console.log('Initializing auth state from storage');
+        console.log('Initializing auth state');
         // Mark as initialized immediately to prevent duplicate calls
         isInitializedRef.current = true;
 
-        // Check if we have a token in local storage or service
+        // Ensure app is initialized (which initializes auth)
+        const appInitializer = AppInitializerService.getInstance();
+        if (!appInitializer.isInitialized()) {
+          appInitializer.initialize();
+        }
+
+        // Get current auth state from auth service
         const token = authServiceInstance.getToken();
         const userData = authServiceInstance.getCurrentUser();
+        const isAuthenticated = authServiceInstance.isAuthenticated();
 
-        if (token && userData) {
+        if (isAuthenticated && token && userData) {
           console.log('Found existing auth data');
           setAuthState({
             isAuthenticated: true,
@@ -74,7 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             status: 'authenticated'
           });
         } else {
-          console.log('No auth data found');
+          console.log('No valid auth data found');
           setAuthState({
             ...initialState,
             status: 'unauthenticated'

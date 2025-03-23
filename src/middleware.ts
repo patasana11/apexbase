@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+// These should match the ones in auth.service.ts
+const COMMON_TOKEN_STORAGE_KEY = 'gsb_common_token';
+const USER_TOKEN_STORAGE_KEY = 'gsb_user_token';
+
 /**
  * ApexBase Middleware
  *
@@ -20,16 +24,30 @@ export function middleware(req: NextRequest) {
   const useCommonToken = shouldUseCommonToken(path);
 
   // Get appropriate token from cookies
-  const tokenKey = useCommonToken ? 'gsb_common_token' : 'gsb_user_token';
+  // Note: We still need to use cookies in middleware since it runs on the server
+  // and doesn't have access to localStorage or the client-side AuthService
+  const tokenKey = useCommonToken ? COMMON_TOKEN_STORAGE_KEY : USER_TOKEN_STORAGE_KEY;
   let token = req.cookies.get(tokenKey)?.value;
 
   // If user token is not available but needed, fall back to common token
   if (!useCommonToken && !token) {
-    token = req.cookies.get('gsb_common_token')?.value;
+    token = req.cookies.get(COMMON_TOKEN_STORAGE_KEY)?.value;
   }
 
+  // Check if token is valid
   if (token) {
-    console.log(`[Middleware] Found GSB ${useCommonToken ? 'common' : 'user'} token for path: ${path}`);
+    // Validate token expiry
+    if (isTokenExpired(token)) {
+      console.log(`[Middleware] Token expired for path: ${path}, redirecting to login`);
+      
+      // Create the callback URL with the current path
+      const url = new URL('/login', req.url);
+      url.searchParams.set('callbackUrl', path);
+      
+      return NextResponse.redirect(url);
+    }
+    
+    console.log(`[Middleware] Found valid GSB ${useCommonToken ? 'common' : 'user'} token for path: ${path}`);
     const requestHeaders = new Headers(req.headers);
     requestHeaders.set('Authorization', `Bearer ${token}`);
 
@@ -54,6 +72,45 @@ export function middleware(req: NextRequest) {
   // For all other cases, just proceed without checking auth
   console.log(`[Middleware] No auth token for path: ${path}, proceeding anyway`);
   return NextResponse.next();
+}
+
+/**
+ * Check if token is expired
+ * @param token The JWT token to check
+ * @returns True if the token is expired
+ */
+function isTokenExpired(token: string): boolean {
+  try {
+    // Decode JWT token to get expiry
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+    
+    const payload = JSON.parse(jsonPayload);
+    
+    // Check for exp claim
+    if (payload.exp) {
+      const expiryTime = payload.exp * 1000; // Convert to milliseconds
+      const now = Date.now();
+      return now >= expiryTime;
+    }
+    
+    // If no exp claim, check for custom expireDate field
+    if (payload.expireDate) {
+      const expiryTime = new Date(payload.expireDate).getTime();
+      const now = Date.now();
+      return now >= expiryTime;
+    }
+    
+    // If no expiry info found, consider not expired
+    return false;
+  } catch (error) {
+    console.error('[Middleware] Error checking token expiry:', error);
+    // If we can't decode the token, consider it expired for safety
+    return true;
+  }
 }
 
 /**

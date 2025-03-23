@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { COMMON_TENANT, shouldInitTenant } from '@/lib/gsb/config/tenant-config';
+import { usePathname, useRouter } from "next/navigation";
+import { shouldInitTenant } from '@/lib/gsb/config/tenant-config';
+import { GSB_CONFIG } from '@/lib/gsb/config/gsb-config';
+import { useAuth } from "@/components/auth-context";
 
 // Icons
 import {
@@ -27,18 +29,29 @@ export default function AccountLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
+  const { logout, user } = useAuth();
 
   // Only initialize in the common tenant
   useEffect(() => {
     setIsClient(true);
 
-    if (!shouldInitTenant(COMMON_TENANT)) {
+    if (!shouldInitTenant(GSB_CONFIG.COMMON_TENANT)) {
       console.log("Not in common tenant, redirecting...");
       // Handle redirecting to common tenant if needed
     }
   }, []);
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      router.push('/');
+    } catch (error) {
+      console.error('Error during logout:', error);
+    }
+  };
 
   // Define sidebar menu items
   const menuItems = [
@@ -127,13 +140,16 @@ export default function AccountLayout({
               </div>
               <div className="ml-3">
                 <p className="text-sm font-medium text-gray-900 dark:text-gray-200">
-                  John Doe
+                  {user?.name || "User"}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  john@example.com
+                  {user?.email || ""}
                 </p>
               </div>
-              <button className="ml-auto text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+              <button 
+                onClick={handleLogout}
+                className="ml-auto text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              >
                 <LogOut className="w-5 h-5" />
               </button>
             </div>

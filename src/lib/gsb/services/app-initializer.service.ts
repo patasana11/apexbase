@@ -1,8 +1,7 @@
 'use client';
 
 import { setCommonGsbToken, setUserGsbToken, setGsbTenantCode } from '../../gsb/config/gsb-config';
-
-
+import { AuthService } from '../services/auth/auth.service';
 
 export interface AppInitializerConfig {
   devMode?: boolean;
@@ -36,6 +35,9 @@ export class AppInitializerService {
     }
 
     try {
+      // Initialize authentication service
+      const authService = AuthService.getInstance();
+      authService.initFromStorage();
       
       this.initialized = true;
       console.log('App initialization completed successfully');
