@@ -67,8 +67,6 @@ export class RegistrationService {
       phoneNumber: data.phoneNumber,
       type: data.subscriptionType,
       emailVerified: false,
-      createDate: new Date(),
-      lastUpdateDate: new Date(),
       // Set social login information if available
       socialProvider: data.socialInfo?.provider || SocialProvider.None,
       socialToken: data.socialInfo?.token,

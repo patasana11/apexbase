@@ -50,8 +50,6 @@ export class SubscriptionService {
       lastUpdatedBy_id: userId,
       paymentType,
       status,
-      createDate: new Date(),
-      lastUpdateDate: new Date(),
       nextPaymentDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
     };
 
@@ -78,8 +76,6 @@ export class SubscriptionService {
       lastUpdatedBy_id: userId,
       quantity,
       active: true,
-      createDate: new Date(),
-      lastUpdateDate: new Date(),
       startDate: new Date(),
       endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year from now
     };

@@ -3,7 +3,7 @@
 import { getGsbToken, getGsbTenantCode } from '../gsb/config/gsb-config';
 import { EntityDefService } from '../gsb/services/entity/entity-def.service';
 import { GsbEntityService } from '../gsb/services/entity/gsb-entity.service';
-import { GsbEntityDef, GsbProperty } from '../gsb/models/gsb-entity-def.model';
+import { GsbEntityDef, GsbProperty, ActivityLogLevel } from '../gsb/models/gsb-entity-def.model';
 import { QueryParams } from '../gsb/types/query-params';
 import { SingleQuery } from '../gsb/types/query';
 import { GsbSaveRequest } from '../gsb/types/requests';
@@ -206,9 +206,10 @@ export class AIAgentService {
         title: tableName,
         description: `Auto-generated table for ${tableName}`,
         properties,
+        publicAccess: false,
+        activityLogLevel: ActivityLogLevel.None,
         isActive: true,
-        isDeleted: false,
-        securityLevel: 'Authorized'
+        isDeleted: false
       };
 
       // Save the entity definition

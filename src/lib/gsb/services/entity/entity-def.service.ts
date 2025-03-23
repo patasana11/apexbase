@@ -150,9 +150,10 @@ export class EntityDefService {
   /**
    * Create a new entity definition
    * @param entityDef The entity definition to create
-   * @returns The created entity definition ID or null if failed
+   * @returns The created entity definition ID
+   * @throws Error with message from API if the request fails
    */
-  async createEntityDef(entityDef: GsbEntityDef): Promise<string | null> {
+  async createEntityDef(entityDef: GsbEntityDef): Promise<string> {
     try {
       // Validate entity definition has required properties
       this.validateEntityDefProperties(entityDef);
@@ -164,12 +165,12 @@ export class EntityDefService {
         isDeleted: entityDef.isDeleted ?? false
       };
 
-      // Set create date fields
-      const entityWithDates = setGsbCreateFields(newEntityDef);
+      // Note: We don't set create/update date fields as the GSB system handles these automatically
+      // const entityWithDates = setGsbCreateFields(newEntityDef);
 
       const request: GsbSaveRequest = {
         entDefName: this.ENTITY_NAME,
-        entity: entityWithDates,
+        entity: newEntityDef,
         entityDef: {},
         entityId: '',
         entDefId: '',
@@ -182,14 +183,21 @@ export class EntityDefService {
         getGsbTenantCode()
       );
 
+      if (!response) {
+        throw new Error('No response received from the server');
+      }
+
       if (!response.id) {
-        return null;
+        // Check for error message in response - GsbSaveResponse only has 'message', not 'error'
+        const errorMsg = response.message || 'Failed to create entity definition';
+        throw new Error(errorMsg);
       }
 
       return response.id;
     } catch (error) {
       console.error('Error creating entity definition:', error);
-      return null;
+      // Propagate the error message to be handled by the UI
+      throw error;
     }
   }
 
@@ -212,7 +220,10 @@ export class EntityDefService {
   }
 
   /**
-   * Get default properties for a new entity definition
+   * Get default properties for a new entity definition.
+   * Note: lastUpdateDate and createDate properties are included here for display in the UI
+   * but the actual values of these fields are automatically managed by the GSB system.
+   * 
    * @param defName The name of the entity definition
    * @returns Array of default GsbProperty objects
    */
@@ -256,7 +267,7 @@ export class EntityDefService {
         "viewFormMode": 2,
         "createFormMode": 4,
         "definition_id": "924ACBA8-58C5-4881-940D-472EC01EBA5F",
-        "refType": "OneToMany",
+        "refType": 2,
         "refEntPropName": ("created" + defName),
         "refEntDef_id": "98CDC0E8-58D6-4923-B22E-591430E52606",
         "orderNumber": 3
@@ -270,7 +281,7 @@ export class EntityDefService {
         "viewFormMode": 2,
         "createFormMode": 4,
         "definition_id": "924ACBA8-58C5-4881-940D-472EC01EBA5F",
-        "refType": "OneToMany",
+        "refType": 2,
         "refEntPropName": ("updated" + defName),
         "refEntDef_id": "98CDC0E8-58D6-4923-B22E-591430E52606",
         "orderNumber": 4
@@ -304,6 +315,7 @@ export class EntityDefService {
    * Update an existing entity definition
    * @param entityDef The entity definition to update
    * @returns True if updated successfully, false otherwise
+   * @throws Error with message from API if the request fails
    */
   async updateEntityDef(entityDef: GsbEntityDef): Promise<boolean> {
     try {
@@ -322,12 +334,11 @@ export class EntityDefService {
         ...entityDef
       };
 
-      // Set update date fields
-      const entityWithDates = setGsbUpdateFields(updatedEntityDef);
+      // Note: We don't set lastUpdateDate as the GSB system handles it automatically
 
       const request: GsbSaveRequest = {
         entDefName: this.ENTITY_NAME,
-        entity: entityWithDates,
+        entity: updatedEntityDef,
         entityDef: {},
         entityId: '',
         entDefId: '',
@@ -340,17 +351,27 @@ export class EntityDefService {
         getGsbTenantCode()
       );
 
-      return !!response.id;
+      if (!response) {
+        throw new Error('No response received from the server');
+      }
+
+      if (!response.id) {
+        const errorMsg = response.message || 'Failed to update entity definition';
+        throw new Error(errorMsg);
+      }
+
+      return true;
     } catch (error) {
       console.error('Error updating entity definition:', error);
-      return false;
+      throw error;
     }
   }
 
   /**
    * Delete an entity definition (soft delete)
    * @param id The entity definition ID to delete
-   * @returns True if deleted successfully, false otherwise
+   * @returns True if deleted successfully
+   * @throws Error with message from API if the request fails
    */
   async deleteEntityDef(id: string): Promise<boolean> {
     try {
@@ -366,9 +387,10 @@ export class EntityDefService {
         isDeleted: true
       };
 
-
       const request: GsbSaveRequest = {
         entDefName: this.ENTITY_NAME,
+        entity: updatedEntityDef,
+        entityDef: {},
         entityId: id,
         entDefId: '',
         query: []
@@ -380,10 +402,19 @@ export class EntityDefService {
         getGsbTenantCode()
       );
 
-      return !!response.id;
+      if (!response) {
+        throw new Error('No response received from the server');
+      }
+
+      if (!response.id) {
+        const errorMsg = response.message || 'Failed to delete entity definition';
+        throw new Error(errorMsg);
+      }
+
+      return true;
     } catch (error) {
       console.error('Error deleting entity definition:', error);
-      return false;
+      throw error;
     }
   }
 
@@ -406,3 +437,9 @@ export class EntityDefService {
     }
   }
 }
+
+/**
+ * Note: Do not set 'createDate' or 'lastUpdateDate' fields manually.
+ * The GSB system will automatically handle these fields and will ignore any values 
+ * provided for them. The server is the source of truth for these timestamps.
+ */

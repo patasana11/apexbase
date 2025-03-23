@@ -1,4 +1,28 @@
 /**
+ * Enum for reference types that matches backend values
+ */
+export enum RefType {
+  NoRef = 0,
+  OneToOne = 1,
+  OneToMany = 2,
+  ManyToOne = 3,
+  ManyToMany = 4
+}
+
+/**
+ * Enum for activity logging levels that matches backend values
+ */
+export enum ActivityLogLevel {
+  None = 0,
+  Read = 1,
+  Create = 2,
+  Update = 4,
+  Delete = 8,
+  Execute = 16,
+  List = 32
+}
+
+/**
  * Represents a GSB Entity Definition
  */
 export interface GsbEntityDef {
@@ -7,7 +31,8 @@ export interface GsbEntityDef {
   title?: string;
   description?: string;
   dbTableName?: string;
-  securityLevel?: 'Authorized' | 'SuperSafe' | 'Public';
+  publicAccess?: boolean;
+  activityLogLevel?: ActivityLogLevel;
   properties?: GsbProperty[];
   isActive?: boolean;
   isDeleted?: boolean;
@@ -39,7 +64,7 @@ export interface GsbProperty {
   maxLength?: number;
   scale?: number;
   defaultValue?: any;
-  refType?: 'OneToOne' | 'OneToMany' | 'ManyToOne' | 'ManyToMany';
+  refType?: RefType;
   refEntDef_id?: string;
   refEntPropName?: string;
   cascadeReference?: boolean;

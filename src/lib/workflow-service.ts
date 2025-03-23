@@ -296,8 +296,7 @@ export const WorkflowService = {
 
     // Update mock data (in real app this would send to server)
     MOCK_WORKFLOWS[workflow.id] = {
-      ...workflow,
-      lastUpdateDate: new Date()
+      ...workflow
     };
 
     return MOCK_WORKFLOWS[workflow.id];

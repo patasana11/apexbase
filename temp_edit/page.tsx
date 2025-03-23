@@ -26,8 +26,6 @@ import {
   FiLoader,
   FiChevronDown,
   FiEdit,
-  FiEye,
-  FiShield,
 } from "react-icons/fi";
 import {
   Card,
@@ -62,7 +60,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/components/ui/use-toast";
 import { EntityDefService } from '@/lib/gsb/services/entity/entity-def.service';
-import { GsbEntityDef, GsbProperty, RefType, ActivityLogLevel } from '@/lib/gsb/models/gsb-entity-def.model';
+import { GsbEntityDef, GsbProperty } from '@/lib/gsb/models/gsb-entity-def.model';
 import { Label as UILabel } from "@/components/ui/label";
 import {
   Dialog,
@@ -82,9 +80,7 @@ import {
 const basicInfoSchema = z.object({
   name: z.string().min(1, "Name is required").max(64),
   title: z.string().min(1, "Title is required").max(128),
-  description: z.string().max(500),
-  publicAccess: z.boolean().default(false),
-  activityLogLevel: z.nativeEnum(ActivityLogLevel).default(ActivityLogLevel.None),
+  description: z.string().max(500)
 });
 
 const propertySchema = z.object({
@@ -135,7 +131,7 @@ interface Property {
   type: string;
   required: boolean;
   reference?: string;
-  refType?: RefType;
+  refType?: "OneToOne" | "OneToMany" | "ManyToOne" | "ManyToMany";
   refEntPropName?: string;
   isDefault?: boolean; // Indicates if this is a default property
   description?: string;
@@ -168,6 +164,13 @@ const DATA_TYPES = [
   "Array",
   "Object",
   "Enum",
+] as const;
+
+const REF_TYPES = [
+  "OneToOne",
+  "OneToMany",
+  "ManyToOne",
+  "ManyToMany",
 ] as const;
 
 // Property Edit Modal Component
@@ -213,17 +216,9 @@ function PropertyEditModal({
   // Handle reference specific settings
   const [selectedRefEntity, setSelectedRefEntity] = useState<string>(propertyData.reference || "");
   const [refEntityPropName, setRefEntityPropName] = useState<string>(propertyData.refEntPropName || "");
-  
-  // Updated to consistently use numeric RefType enum values
-  const [selectedRefType, setSelectedRefType] = useState<RefType>(() => {
-    // If property has a refType value already, use it
-    if (propertyData.refType !== undefined) {
-      // All refType values should now be of type RefType enum
-      return propertyData.refType;
-    }
-    // Default to OneToMany if no refType is provided
-    return RefType.OneToMany;
-  });
+  const [selectedRefType, setSelectedRefType] = useState<"OneToOne" | "OneToMany" | "ManyToOne" | "ManyToMany">(
+    propertyData.refType || "OneToMany"
+  );
 
   // Update reference fields when entity is selected
   useEffect(() => {
@@ -476,34 +471,34 @@ function PropertyEditModal({
               <div>
                 <UILabel htmlFor="refType">Reference Type</UILabel>
                 <Select
-                  value={String(selectedRefType)}
-                  onValueChange={(value) => 
-                    setSelectedRefType(Number(value) as RefType)
+                  value={selectedRefType}
+                  onValueChange={(value: "OneToOne" | "OneToMany" | "ManyToOne" | "ManyToMany") => 
+                    setSelectedRefType(value)
                   }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select reference type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={String(RefType.OneToOne)}>
+                    <SelectItem value="OneToOne">
                       <div className="flex flex-col">
                         <span>OneToOne</span>
                         <span className="text-xs text-muted-foreground">Each record has exactly one match (1:1)</span>
                       </div>
                     </SelectItem>
-                    <SelectItem value={String(RefType.OneToMany)}>
+                    <SelectItem value="OneToMany">
                       <div className="flex flex-col">
                         <span>OneToMany</span>
                         <span className="text-xs text-muted-foreground">This entity has many related records (1:N)</span>
                       </div>
                     </SelectItem>
-                    <SelectItem value={String(RefType.ManyToOne)}>
+                    <SelectItem value="ManyToOne">
                       <div className="flex flex-col">
                         <span>ManyToOne</span>
                         <span className="text-xs text-muted-foreground">Many of this entity refer to one record (N:1)</span>
                       </div>
                     </SelectItem>
-                    <SelectItem value={String(RefType.ManyToMany)}>
+                    <SelectItem value="ManyToMany">
                       <div className="flex flex-col">
                         <span>ManyToMany</span>
                         <span className="text-xs text-muted-foreground">Many-to-many relationship (N:N)</span>
@@ -693,18 +688,12 @@ export default function NewDataTablePage() {
   const [description, setDescription] = useState("");
   const [selectedRefEntity, setSelectedRefEntity] = useState<string>("");
   const [refEntityPropName, setRefEntityPropName] = useState<string>("");
-  const [selectedRefType, setSelectedRefType] = useState<RefType>(RefType.OneToMany);
+  const [selectedRefType, setSelectedRefType] = useState<"OneToOne" | "OneToMany" | "ManyToOne" | "ManyToMany">("OneToMany");
   const [newProperty, setNewProperty] = useState<Property>({
     name: "",
     type: "String",
     required: false,
   });
-  
-  // Property edit modal state
-  const [isPropertyModalOpen, setIsPropertyModalOpen] = useState(false);
-  const [editingProperty, setEditingProperty] = useState<Property | null>(null);
-  const [isEditingExisting, setIsEditingExisting] = useState(false);
-  const [propertyIndexToEdit, setPropertyIndexToEdit] = useState<number | null>(null);
 
   // Load default properties on mount and when name changes
   useEffect(() => {
@@ -761,19 +750,12 @@ export default function NewDataTablePage() {
           ? prop.refEntPropName.replace("DefaultEntity", defName || "")
           : prop.refEntPropName;
           
-        // Ensure refType is always a RefType enum value
-        let refType: RefType | undefined = undefined;
-        if (prop.refType !== undefined) {
-          // The backend always sends numeric values, so we can safely cast it
-          refType = prop.refType as unknown as RefType;
-        }
-          
         return {
           name: prop.name,
           type: prop.refType ? "Reference" : "String", // Simplified type mapping
           required: prop.isRequired || false,
           reference: prop.refEntDef_id,
-          refType: refType,
+          refType: prop.refType,
           refEntPropName: refEntPropName,
           isDefault: true,
           description: prop.title
@@ -823,8 +805,6 @@ export default function NewDataTablePage() {
       name: "",
       title: "",
       description: "",
-      publicAccess: false,
-      activityLogLevel: ActivityLogLevel.None,
     },
   });
 
@@ -883,43 +863,6 @@ export default function NewDataTablePage() {
     }
   }, [selectedRefEntity, newProperty.type, tables]);
 
-  // Open modal to add a new property
-  const openAddPropertyModal = () => {
-    setEditingProperty(null);
-    setIsEditingExisting(false);
-    setPropertyIndexToEdit(null);
-    setIsPropertyModalOpen(true);
-  };
-  
-  // Open modal to edit an existing property
-  const openEditPropertyModal = (property: Property, index: number) => {
-    setEditingProperty({...property});
-    setIsEditingExisting(true);
-    setPropertyIndexToEdit(index);
-    setIsPropertyModalOpen(true);
-  };
-  
-  // Handle property modal save
-  const handlePropertySave = (property: Property) => {
-    if (isEditingExisting && propertyIndexToEdit !== null) {
-      // Update existing property
-      const updatedProperties = [...properties];
-      updatedProperties[propertyIndexToEdit] = property;
-      setProperties(updatedProperties);
-      toast({
-        title: "Property Updated",
-        description: `Property "${property.name}" updated successfully.`,
-      });
-    } else {
-      // Add new property
-      setProperties([...properties, property]);
-      toast({
-        title: "Property Added",
-        description: `Property "${property.name}" added successfully.`,
-      });
-    }
-  };
-
   const addProperty = () => {
     if (newProperty.name && newProperty.type) {
       const propToAdd = {...newProperty};
@@ -941,7 +884,7 @@ export default function NewDataTablePage() {
       });
       setSelectedRefEntity("");
       setRefEntityPropName("");
-      setSelectedRefType(RefType.OneToMany);
+      setSelectedRefType("OneToMany");
     }
   };
 
@@ -975,61 +918,27 @@ export default function NewDataTablePage() {
         throw new Error('Entity definition must have at least id and title properties');
       }
       
-      // DEBUG: Log property refType values for Reference properties
-      properties.forEach(prop => {
-        if (prop.type === "Reference") {
-          console.log(`DEBUG - Property: ${prop.name}, refType: ${prop.refType}, typeof refType: ${typeof prop.refType}`);
-        }
-      });
-      
       // Map user-defined properties to GSB property format
-      const mappedProperties: GsbProperty[] = properties.map((prop) => {
-        // Base property structure with required fields explicitly set
-        const baseProperty = {
-          name: prop.name,
-          title: prop.description || prop.name,
-          isRequired: prop.required || false,
-          isSearchable: prop.type === "String",
-          // Preserve the definition_id from default properties or use proper UUIDs
-          definition_id: prop.isDefault ? 
-            // For default properties, use a standard definition ID based on name
-            prop.name === "id" ? "5C0AA76F-9C32-4E7E-A4BC-B56E93877883" :
-            prop.name === "title" ? "C6C34BF3-F51B-4E69-A689-B09847BE74B9" :
-            prop.name === "createdBy" || prop.name === "lastUpdatedBy" ? "924ACBA8-58C5-4881-940D-472EC01EBA5F" :
-            prop.name === "createDate" || prop.name === "lastUpdateDate" ? "12E647E0-EBD2-4EC2-A4E3-82C1DFE07DA2" :
-            "00000000-0000-0000-0000-000000000000" : 
-            "00000000-0000-0000-0000-000000000000", // Non-empty placeholder UUID for custom properties
-          orderNumber: properties.indexOf(prop),
-        };
-        
-        // Add reference type settings only for reference properties
-        if (prop.type === "Reference") {
-          console.log(`DEBUG - Processing Reference property: ${prop.name}`);
-          
-          // Since refType is now always a RefType enum, we can simplify this logic
-          const finalRefType = prop.refType !== undefined ? prop.refType : RefType.OneToMany;
-          console.log(`DEBUG - Using refType: ${finalRefType}`);
-          
-          return {
-            ...baseProperty,
-            refType: finalRefType,
-            refEntDef_id: prop.reference,
-            refEntPropName: prop.refEntPropName
-          } as GsbProperty;
-        }
-        
-        // For non-reference types, return just the base property
-        return baseProperty as GsbProperty;
-      });
+      const mappedProperties: GsbProperty[] = properties.map((prop) => ({
+        name: prop.name,
+        title: prop.description || prop.name,
+        isRequired: prop.required,
+        isSearchable: prop.type === "String",
+        definition_id: "", // This will be filled by the backend
+        orderNumber: properties.indexOf(prop),
+        // Map specific property types to appropriate settings
+        ...(prop.type === "Reference" && { 
+          refType: prop.refType,
+          refEntDef_id: prop.reference,
+          refEntPropName: prop.refEntPropName
+        }),
+      }));
       
       const entityDefinition = {
         title,
         name,
         description,
-        properties: mappedProperties,
-        publicAccess: basicInfoForm.getValues().publicAccess,
-        activityLogLevel: basicInfoForm.getValues().activityLogLevel,
-        // Note: Don't set lastUpdateDate or createDate as GSB will set these automatically
+        properties: mappedProperties
       };
 
       console.log("Creating new data table:", entityDefinition);
@@ -1037,30 +946,20 @@ export default function NewDataTablePage() {
       // Create the entity definition
       const entityDefId = await entityDefService.createEntityDef(entityDefinition as GsbEntityDef);
       
-      // If we get here, it means the operation was successful
-      toast({
-        title: "Success",
-        description: `Data table "${title}" created successfully`,
-      });
-      router.push('/dashboard/database');
+      if (entityDefId) {
+        toast({
+          title: "Success",
+          description: `Data table "${title}" created successfully`,
+        });
+        router.push('/dashboard/database');
+      } else {
+        throw new Error("Failed to create entity definition");
+      }
     } catch (error) {
       console.error("Error creating entity definition:", error);
-      
-      // Extract server error message if available
-      let errorMessage = "Failed to create data table";
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      } else if (typeof error === 'object' && error !== null) {
-        if ('message' in error) {
-          errorMessage = (error as any).message;
-        } else if ('data' in error && typeof (error as any).data === 'object' && (error as any).data !== null && 'message' in (error as any).data) {
-          errorMessage = (error as any).data.message;
-        }
-      }
-      
       toast({
         title: "Error",
-        description: errorMessage,
+        description: `Failed to create data table: ${error instanceof Error ? error.message : String(error)}`,
         variant: "destructive",
       });
     } finally {
@@ -1070,16 +969,6 @@ export default function NewDataTablePage() {
 
   return (
     <div className="container mx-auto py-6 space-y-6">
-      {/* Property Edit Modal */}
-      <PropertyEditModal
-        isOpen={isPropertyModalOpen}
-        onClose={() => setIsPropertyModalOpen(false)}
-        property={editingProperty}
-        tables={tables}
-        onSave={handlePropertySave}
-        isEditing={isEditingExisting}
-      />
-      
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Create New Data Table</h1>
         <Button 
@@ -1145,74 +1034,6 @@ export default function NewDataTablePage() {
             <p className="text-sm text-muted-foreground">
               A detailed description of this data table's purpose and contents.
             </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-6 pt-2">
-            <div className="space-y-2">
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="publicAccess"
-                  checked={basicInfoForm.getValues().publicAccess}
-                  onCheckedChange={(checked) => {
-                    basicInfoForm.setValue('publicAccess', checked);
-                  }}
-                />
-                <UILabel htmlFor="publicAccess" className="font-medium">Public Access</UILabel>
-                <FiShield className="ml-1 h-4 w-4 text-muted-foreground" />
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Allow unauthenticated access to this data table.
-              </p>
-            </div>
-            
-            <div className="space-y-2">
-              <UILabel htmlFor="activityLogLevel" className="font-medium">Activity Logging</UILabel>
-              <Select
-                value={String(basicInfoForm.getValues().activityLogLevel)}
-                onValueChange={(value) => {
-                  basicInfoForm.setValue('activityLogLevel', Number(value) as ActivityLogLevel);
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select log level" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={String(ActivityLogLevel.None)}>
-                    <div className="flex flex-col">
-                      <span>No Logging</span>
-                      <span className="text-xs text-muted-foreground">Activities are not logged</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value={String(ActivityLogLevel.Read)}>
-                    <div className="flex flex-col">
-                      <span>Read Only</span>
-                      <span className="text-xs text-muted-foreground">Log only read operations</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value={String(ActivityLogLevel.Create | ActivityLogLevel.Update | ActivityLogLevel.Delete)}>
-                    <div className="flex flex-col">
-                      <span>Write Operations</span>
-                      <span className="text-xs text-muted-foreground">Log create, update, and delete operations</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value={String(ActivityLogLevel.Read | ActivityLogLevel.Create | ActivityLogLevel.Update | ActivityLogLevel.Delete)}>
-                    <div className="flex flex-col">
-                      <span>Read & Write</span>
-                      <span className="text-xs text-muted-foreground">Log all read and write operations</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value={String(ActivityLogLevel.Read | ActivityLogLevel.Create | ActivityLogLevel.Update | ActivityLogLevel.Delete | ActivityLogLevel.Execute | ActivityLogLevel.List)}>
-                    <div className="flex flex-col">
-                      <span>Full Logging</span>
-                      <span className="text-xs text-muted-foreground">Log all operations</span>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-sm text-muted-foreground">
-                Specify which activities should be logged for this entity.
-              </p>
-            </div>
           </div>
         </CardContent>
       </Card>
@@ -1310,34 +1131,34 @@ export default function NewDataTablePage() {
                 <div>
                   <UILabel htmlFor="refType">Reference Type</UILabel>
                   <Select
-                    value={String(selectedRefType)}
-                    onValueChange={(value) => 
-                      setSelectedRefType(Number(value) as RefType)
+                    value={selectedRefType}
+                    onValueChange={(value: "OneToOne" | "OneToMany" | "ManyToOne" | "ManyToMany") => 
+                      setSelectedRefType(value)
                     }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select reference type" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={String(RefType.OneToOne)}>
+                      <SelectItem value="OneToOne">
                         <div className="flex flex-col">
                           <span>OneToOne</span>
                           <span className="text-xs text-muted-foreground">Each record has exactly one match (1:1)</span>
                         </div>
                       </SelectItem>
-                      <SelectItem value={String(RefType.OneToMany)}>
+                      <SelectItem value="OneToMany">
                         <div className="flex flex-col">
                           <span>OneToMany</span>
                           <span className="text-xs text-muted-foreground">This entity has many related records (1:N)</span>
                         </div>
                       </SelectItem>
-                      <SelectItem value={String(RefType.ManyToOne)}>
+                      <SelectItem value="ManyToOne">
                         <div className="flex flex-col">
                           <span>ManyToOne</span>
                           <span className="text-xs text-muted-foreground">Many of this entity refer to one record (N:1)</span>
                         </div>
                       </SelectItem>
-                      <SelectItem value={String(RefType.ManyToMany)}>
+                      <SelectItem value="ManyToMany">
                         <div className="flex flex-col">
                           <span>ManyToMany</span>
                           <span className="text-xs text-muted-foreground">Many-to-many relationship (N:N)</span>
@@ -1405,13 +1226,6 @@ export default function NewDataTablePage() {
                       </>
                     )}
                   </Button>
-                  <Button 
-                    size="sm" 
-                    onClick={openAddPropertyModal}
-                  >
-                    <FiPlus className="mr-2 h-3 w-3" />
-                    Add Property
-                  </Button>
                   <Badge variant="outline" className="px-2 py-1">
                     {properties.length} {properties.length === 1 ? 'property' : 'properties'}
                   </Badge>
@@ -1444,11 +1258,7 @@ export default function NewDataTablePage() {
                           {prop.isDefault && <Badge variant="outline">Default</Badge>}
                           {prop.type === "Reference" && prop.refType && (
                             <Badge variant="outline" className="bg-blue-50 dark:bg-blue-900">
-                              {prop.refType === RefType.OneToOne ? "OneToOne" : 
-                               prop.refType === RefType.OneToMany ? "OneToMany" : 
-                               prop.refType === RefType.ManyToOne ? "ManyToOne" : 
-                               prop.refType === RefType.ManyToMany ? "ManyToMany" : 
-                               "Reference"}
+                              {prop.refType}
                             </Badge>
                           )}
                         </div>
@@ -1461,25 +1271,15 @@ export default function NewDataTablePage() {
                           </span>
                         )}
                       </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openEditPropertyModal(prop, index)}
-                        >
-                          <FiEdit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => removeProperty(index)}
-                          className={prop.isDefault && (prop.name === "id" || prop.name === "title") ? "opacity-50" : ""}
-                          disabled={prop.isDefault && (prop.name === "id" || prop.name === "title")}
-                        >
-                          {prop.isDefault && (prop.name === "id" || prop.name === "title") ? 
-                            "Required" : <FiTrash2 className="h-4 w-4" />}
-                        </Button>
-                      </div>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => removeProperty(index)}
+                        className={prop.isDefault && (prop.name === "id" || prop.name === "title") ? "opacity-50" : ""}
+                        disabled={prop.isDefault && (prop.name === "id" || prop.name === "title")}
+                      >
+                        {prop.isDefault && (prop.name === "id" || prop.name === "title") ? "Required" : "Remove"}
+                      </Button>
                     </div>
                   ))
                 )}
