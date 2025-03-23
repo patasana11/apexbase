@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { AuthService } from '@/lib/gsb/services/auth/auth.service';
+import { useSearchParams } from 'next/navigation';
 
 export enum SocialProvider {
   Google = 'google',
@@ -25,6 +26,8 @@ export default function SocialLoginButtons({
 }: SocialLoginButtonsProps) {
   const [isLoading, setIsLoading] = useState<SocialProvider | null>(null);
   const authService = AuthService.getInstance();
+  const searchParams = useSearchParams ? useSearchParams() : null;
+  const callbackUrl = searchParams?.get('callbackUrl') || '/dashboard';
 
   const handleSocialAuth = async (provider: SocialProvider, token: string) => {
     if (onLogin) {
@@ -60,8 +63,8 @@ export default function SocialLoginButtons({
           throw new Error(response.error || 'Social authentication failed');
         }
 
-        // Redirect or handle successful login
-        window.location.href = '/dashboard';
+        // Redirect to callback URL if present, otherwise to dashboard
+        window.location.href = callbackUrl;
       } catch (error) {
         console.error(`${provider} login error:`, error);
       }
@@ -71,23 +74,11 @@ export default function SocialLoginButtons({
   const handleGoogleLogin = async () => {
     setIsLoading(SocialProvider.Google);
     try {
-      // In a real implementation, this would open a popup window
-      // or redirect to Google for OAuth authentication
-      window.location.href = '/api/auth/google';
+      // Preserve the callback URL when redirecting to OAuth
+      const encodedCallback = encodeURIComponent(callbackUrl);
+      window.location.href = `/api/auth/google?callbackUrl=${encodedCallback}`;
     } catch (error) {
       console.error('Google login error:', error);
-      setIsLoading(null);
-    }
-  };
-
-  const handleGithubLogin = async () => {
-    setIsLoading(SocialProvider.Github);
-    try {
-      // In a real implementation, this would open a popup window
-      // or redirect to GitHub for OAuth authentication
-      window.location.href = '/api/auth/github';
-    } catch (error) {
-      console.error('GitHub login error:', error);
       setIsLoading(null);
     }
   };
@@ -95,11 +86,35 @@ export default function SocialLoginButtons({
   const handleFacebookLogin = async () => {
     setIsLoading(SocialProvider.Facebook);
     try {
-      // In a real implementation, this would open a popup window
-      // or redirect to Facebook for OAuth authentication
-      window.location.href = '/api/auth/facebook';
+      // Preserve the callback URL when redirecting to OAuth
+      const encodedCallback = encodeURIComponent(callbackUrl);
+      window.location.href = `/api/auth/facebook?callbackUrl=${encodedCallback}`;
     } catch (error) {
       console.error('Facebook login error:', error);
+      setIsLoading(null);
+    }
+  };
+
+  const handleGithubLogin = async () => {
+    setIsLoading(SocialProvider.Github);
+    try {
+      // Preserve the callback URL when redirecting to OAuth
+      const encodedCallback = encodeURIComponent(callbackUrl);
+      window.location.href = `/api/auth/github?callbackUrl=${encodedCallback}`;
+    } catch (error) {
+      console.error('GitHub login error:', error);
+      setIsLoading(null);
+    }
+  };
+
+  const handleAppleLogin = async () => {
+    setIsLoading(SocialProvider.Apple);
+    try {
+      // Preserve the callback URL when redirecting to OAuth
+      const encodedCallback = encodeURIComponent(callbackUrl);
+      window.location.href = `/api/auth/apple?callbackUrl=${encodedCallback}`;
+    } catch (error) {
+      console.error('Apple login error:', error);
       setIsLoading(null);
     }
   };

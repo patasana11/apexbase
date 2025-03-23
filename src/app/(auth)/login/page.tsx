@@ -31,14 +31,14 @@ export default function LoginPage() {
   // Redirect if already authenticated
   useEffect(() => {
     if (status === 'authenticated') {
-      console.log('LoginPage: User already authenticated, redirecting to dashboard');
+      console.log(`LoginPage: User already authenticated, redirecting to ${callbackUrl}`);
       startNavigation();
-      router.push('/dashboard');
+      router.push(callbackUrl);
     } else if (status !== 'loading') {
       // If we're not authenticated and not loading, we can complete any in-progress navigation
       completeNavigation();
     }
-  }, [status, router, startNavigation, completeNavigation]);
+  }, [status, router, startNavigation, completeNavigation, callbackUrl]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,9 +56,25 @@ export default function LoginPage() {
       );
 
       if (success) {
-        console.log('Login successful, redirecting to dashboard using client-side navigation');
-        // Use client-side navigation
-        router.push(callbackUrl);
+        console.log(`Login successful, redirecting to: ${callbackUrl}`);
+        
+        // Use replace instead of push for more reliable redirect behavior
+        router.replace(callbackUrl, { 
+          scroll: false 
+        });
+        
+        // Add a small delay to ensure the auth state is fully updated before navigation
+        setTimeout(() => {
+          // Force a navigation completion in case the router doesn't trigger it
+          completeNavigation();
+          
+          // If router.replace doesn't trigger navigation within a reasonable time, force it
+          // This ensures the user always gets redirected to their intended destination
+          if (window.location.pathname !== new URL(callbackUrl, window.location.origin).pathname) {
+            console.log('Forcing navigation to:', callbackUrl);
+            window.location.href = callbackUrl;
+          }
+        }, 300);
       } else {
         throw new Error('Authentication failed');
       }

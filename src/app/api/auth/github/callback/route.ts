@@ -10,9 +10,10 @@ export async function GET(request: NextRequest) {
   // Get code from query parameters
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
+  const callbackUrl = url.searchParams.get('callbackUrl') || '/dashboard';
 
   if (!code) {
-    return NextResponse.redirect(new URL('/register?error=missing_code', request.url));
+    return NextResponse.redirect(new URL(`/register?error=missing_code&callbackUrl=${encodeURIComponent(callbackUrl)}`, request.url));
   }
 
   try {
@@ -54,10 +55,10 @@ export async function GET(request: NextRequest) {
     // Simulate successful authentication
     // In production, check if authResponse.success
 
-    // Redirect to dashboard
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+    // Redirect to the provided callback URL or dashboard
+    return NextResponse.redirect(new URL(callbackUrl, request.url));
   } catch (error) {
     console.error('GitHub auth error:', error);
-    return NextResponse.redirect(new URL('/register?error=github_auth_failed', request.url));
+    return NextResponse.redirect(new URL(`/register?error=github_auth_failed&callbackUrl=${encodeURIComponent(callbackUrl)}`, request.url));
   }
 }

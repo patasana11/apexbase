@@ -5,10 +5,16 @@ import type { NextRequest } from 'next/server';
  * ApexBase Middleware
  *
  * This middleware handles both common and user-specific tokens based on URL path.
+ * It also handles redirecting unauthorized users from protected routes to login.
  */
 export function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
   console.log(`[Middleware] Processing request for path: ${path}`);
+
+  // Skip auth check for public routes
+  if (isPublicRoute(path)) {
+    return NextResponse.next();
+  }
 
   // Determine which token to use based on the path
   const useCommonToken = shouldUseCommonToken(path);
@@ -32,6 +38,17 @@ export function middleware(req: NextRequest) {
         headers: requestHeaders,
       },
     });
+  }
+
+  // Check if this is a protected route that requires authentication
+  if (isProtectedRoute(path)) {
+    console.log(`[Middleware] No auth token for protected path: ${path}, redirecting to login`);
+    
+    // Create the callback URL with the current path
+    const url = new URL('/login', req.url);
+    url.searchParams.set('callbackUrl', path);
+    
+    return NextResponse.redirect(url);
   }
 
   // For all other cases, just proceed without checking auth
@@ -59,7 +76,23 @@ function shouldUseCommonToken(pathname: string): boolean {
 }
 
 /**
- * Helper function to check if a route is public (for logging/debugging)
+ * Helper function to check if a route requires authentication
+ */
+function isProtectedRoute(pathname: string): boolean {
+  const protectedPaths = [
+    '/dashboard',
+    '/account',
+    '/settings',
+    '/projects',
+    '/admin',
+  ];
+
+  // Check if pathname starts with any of the protected paths
+  return protectedPaths.some(path => pathname.startsWith(path));
+}
+
+/**
+ * Helper function to check if a route is public (no auth required)
  */
 function isPublicRoute(pathname: string): boolean {
   const publicPaths = [

@@ -5,6 +5,10 @@ import { RegistrationService, SocialProvider } from '@/lib/gsb/services/registra
 // In a real app, you would use a proper OAuth flow
 export async function GET(req: NextRequest) {
   try {
+    const url = new URL(req.url);
+    // Get and preserve callbackUrl parameter
+    const callbackUrl = url.searchParams.get('callbackUrl') || '/dashboard';
+
     // In a real implementation, this would:
     // 1. Redirect to Google OAuth consent screen
     // 2. Get the authorization code from the redirect
@@ -29,19 +33,20 @@ export async function GET(req: NextRequest) {
 
     if (!result.success) {
       return NextResponse.redirect(
-        new URL(`/registration?error=auth_failed`, req.nextUrl.origin)
+        new URL(`/registration?error=auth_failed&callbackUrl=${encodeURIComponent(callbackUrl)}`, req.nextUrl.origin)
       );
     }
 
     // If this is a new user, redirect to verification
-    // Otherwise, redirect to the dashboard
+    // Otherwise, redirect to the provided callback URL or dashboard
     if (result.isNewUser) {
       return NextResponse.redirect(
-        new URL(`/registration/verify?email=${mockUserData.email}&registrationId=${result.registrationId}`, req.nextUrl.origin)
+        new URL(`/registration/verify?email=${mockUserData.email}&registrationId=${result.registrationId}&callbackUrl=${encodeURIComponent(callbackUrl)}`, req.nextUrl.origin)
       );
     } else {
+      // Use callbackUrl if provided
       return NextResponse.redirect(
-        new URL('/dashboard', req.nextUrl.origin)
+        new URL(callbackUrl, req.nextUrl.origin)
       );
     }
   } catch (error) {
