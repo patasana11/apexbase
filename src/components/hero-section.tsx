@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { FiArrowRight, FiCheck, FiShield, FiDatabase, FiLock } from "react-icons/fi";
+import { FiArrowRight, FiShield, FiDatabase, FiLock, FiServer, FiSearch } from "react-icons/fi";
 
 export function HeroSection() {
   return (
@@ -14,40 +14,40 @@ export function HeroSection() {
         <div className="flex flex-col items-center text-center">
           <Badge variant="outline" className="mb-6 px-3.5 py-1.5 text-sm">
             <span className="mr-1 inline-block h-2 w-2 animate-pulse rounded-full bg-blue-600"></span>
-            Introducing ApexBase - Now in Public Beta
+            Enterprise-Grade Backend as a Service
           </Badge>
 
           <h1 className="mb-6 text-4xl font-extrabold tracking-tight sm:text-5xl md:text-6xl lg:text-7xl">
-            Secure Backend <br className="hidden sm:inline" />
+            Advanced Data Control <br className="hidden sm:inline" />
             <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-              For Modern Apps
+              With Unmatched Security
             </span>
           </h1>
 
           <p className="mb-8 max-w-2xl text-xl text-muted-foreground">
-            Enterprise-grade backend as a service with robust security, scalability, and comprehensive features to power your applications. Trusted by developers worldwide.
+            Powerful backend infrastructure with advanced query capabilities, column-level authorization, and
+            enterprise security. Access your data securely without complex backend coding.
           </p>
 
           <div className="mb-12 flex flex-col gap-4 sm:flex-row sm:gap-4">
-            <Button size="lg" asChild>
-              <Link href="/registration" className="gap-1">
-                Start Building
-                <FiArrowRight className="ml-1 h-4 w-4" />
-              </Link>
+            <Button size="lg">
+              Start Building
+              <FiArrowRight className="ml-1 h-4 w-4" />
+              <span className="ml-2 text-xs opacity-70">(Coming Soon)</span>
             </Button>
             <Button size="lg" variant="outline" asChild>
-              <Link href="/docs" className="gap-1">
-                Read Documentation
+              <Link href="/features/query-system" className="gap-1">
+                Explore Advanced Queries
               </Link>
             </Button>
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
             {[
+              { icon: <FiSearch className="h-4 w-4" />, text: "Advanced Query System" },
+              { icon: <FiLock className="h-4 w-4" />, text: "Column-Level Authorization" },
               { icon: <FiShield className="h-4 w-4" />, text: "Enterprise Security" },
-              { icon: <FiDatabase className="h-4 w-4" />, text: "Scalable Database" },
-              { icon: <FiLock className="h-4 w-4" />, text: "End-to-End Encryption" },
-              { icon: <FiCheck className="h-4 w-4" />, text: "99.99% Uptime" },
+              { icon: <FiDatabase className="h-4 w-4" />, text: "Automated Database" },
             ].map((item, index) => (
               <div
                 key={index}

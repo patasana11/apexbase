@@ -7,61 +7,64 @@ import { Badge } from "@/components/ui/badge";
 export function PricingSection() {
   const plans = [
     {
-      name: "Free",
-      description: "For hobbyists and personal projects",
+      name: "Developer",
+      description: "Perfect for personal projects and prototypes",
       price: "$0",
       per: "month",
       popular: false,
       features: [
         "Authentication (up to 1,000 MAU)",
-        "Database storage (1GB)",
-        "File storage (1GB)",
-        "Serverless functions (100K executions/mo)",
-        "Community support",
+        "Database (5GB storage)",
+        "1 workflow",
+        "REST API access",
         "Basic security features",
+        "Community support",
+        "1 team member",
       ],
       cta: "Get Started",
       ctaLink: "/register",
     },
     {
-      name: "Pro",
-      description: "For startups and growing applications",
-      price: "$29",
+      name: "Startup",
+      description: "For growing applications with more demands",
+      price: "$49",
       per: "month",
       popular: true,
       features: [
         "Authentication (up to 10,000 MAU)",
-        "Database storage (10GB)",
-        "File storage (20GB)",
-        "Serverless functions (1M executions/mo)",
-        "Priority support",
-        "Advanced security features",
-        "Custom domains",
-        "Team collaboration",
+        "Database (20GB storage)",
+        "10 workflows",
+        "REST API with webhooks",
+        "Advanced security",
+        "Priority email support",
+        "5 team members",
+        "Backup and disaster recovery",
+        "TypeScript function support",
       ],
       cta: "Start 14-day Trial",
       ctaLink: "/register",
     },
     {
       name: "Business",
-      description: "For scale-ups and larger organizations",
-      price: "$99",
+      description: "For established businesses with complex needs",
+      price: "$149",
       per: "month",
       popular: false,
       features: [
         "Authentication (up to 50,000 MAU)",
-        "Database storage (50GB)",
-        "File storage (100GB)",
-        "Serverless functions (10M executions/mo)",
-        "Premium support",
-        "Enterprise security features",
-        "Custom domains & branding",
-        "Team collaboration & roles",
-        "Advanced analytics",
-        "SLA guarantee",
+        "Database (100GB storage)",
+        "Unlimited workflows",
+        "Complete API suite",
+        "Enterprise security",
+        "Dedicated support",
+        "Unlimited team members",
+        "Advanced backup options",
+        "Custom roles and permissions",
+        "Workflow monitoring and analytics",
+        "SLA guarantees",
       ],
-      cta: "Contact Sales",
-      ctaLink: "/contact",
+      cta: "Start 14-day Trial",
+      ctaLink: "/register",
     },
     {
       name: "Enterprise",
@@ -72,19 +75,18 @@ export function PricingSection() {
       features: [
         "Authentication (unlimited MAU)",
         "Custom database storage",
-        "Custom file storage",
-        "Unlimited serverless functions",
-        "Dedicated support",
-        "Enterprise-grade security",
-        "Custom domains & branding",
-        "Advanced team roles & permissions",
-        "Enterprise analytics & reporting",
-        "Dedicated infrastructure",
-        "Custom SLA guarantee",
-        "On-premises deployment options",
+        "Unlimited everything",
+        "Custom API development",
+        "Dedicated security consultation",
+        "24/7 premium support",
+        "Custom SLA",
+        "On-premises deployment option",
+        "Custom integrations",
+        "Dedicated account manager",
+        "Migration assistance",
       ],
       cta: "Contact Us",
-      ctaLink: "/enterprise",
+      ctaLink: "/contact",
     },
   ];
 
@@ -93,10 +95,10 @@ export function PricingSection() {
       <div className="container">
         <div className="mx-auto mb-16 max-w-3xl text-center">
           <h2 className="mb-4 text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
-            Transparent, Predictable Pricing
+            Flexible Pricing for Every Stage
           </h2>
           <p className="text-xl text-muted-foreground">
-            Start for free, upgrade as you grow. No hidden fees or surprises.
+            Choose a plan that matches your needs. Scale as your application grows.
           </p>
         </div>
 
@@ -152,7 +154,10 @@ export function PricingSection() {
                   variant={plan.popular ? "default" : "outline"}
                   asChild
                 >
-                  <Link href={plan.ctaLink}>{plan.cta}</Link>
+                  <Link href={plan.ctaLink}>
+                    {plan.cta}
+                    <span className="ml-2 text-xs opacity-70">(Coming Soon)</span>
+                  </Link>
                 </Button>
               </CardFooter>
             </Card>
@@ -161,10 +166,13 @@ export function PricingSection() {
 
         <div className="mt-16 text-center">
           <p className="mb-4 text-muted-foreground">
-            Need a custom plan? Contact our sales team for a tailored solution.
+            Need a custom solution? Our team is ready to create a tailored package for your specific requirements.
           </p>
           <Button variant="outline" asChild>
-            <Link href="/contact">Contact Sales</Link>
+            <Link href="/contact">
+              Contact Sales
+              <span className="ml-2 text-xs opacity-70">(Coming Soon)</span>
+            </Link>
           </Button>
         </div>
       </div>

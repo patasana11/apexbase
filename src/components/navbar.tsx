@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { ClientNavigationLink } from "./client-navigation-link";
 import {
   FiChevronDown,
   FiMenu,
@@ -23,111 +24,118 @@ import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
 export function Navbar() {
   const [isOpen, setIsOpen] = React.useState(false);
 
+  // Handle client-side navigation transitions
+  const handleNavigation = () => {
+    // Comment out navigation tracking to prevent auth errors
+  };
+
   const features = [
     {
-      title: "Authentication",
-      description: "User management, social logins, JWT and more",
-      href: "/features/authentication",
+      title: "Database Automation",
+      description: "Automated schema and data management",
+      href: "/features/database-automation",
     },
     {
-      title: "Database",
-      description: "Powerful database with real-time capabilities",
-      href: "/features/database",
+      title: "Advanced Query System",
+      description: "Powerful data mining and reporting tools",
+      href: "/features/query-system",
     },
     {
-      title: "Storage",
-      description: "File storage, uploads, and CDN integration",
-      href: "/features/storage",
+      title: "Advanced Authorization",
+      description: "Column-level security and access control",
+      href: "/features/authorization",
     },
     {
-      title: "Functions",
-      description: "Serverless functions that scale automatically",
-      href: "/features/functions",
+      title: "Integration API",
+      description: "Automatic API generation for your data",
+      href: "/features/api",
     },
     {
-      title: "Security",
-      description: "Enterprise-grade security with encryption",
+      title: "Enterprise Security",
+      description: "End-to-end encryption and audit logging",
       href: "/features/security",
     },
     {
-      title: "Analytics",
-      description: "Real-time analytics and monitoring",
-      href: "/features/analytics",
+      title: "Visual Workflows",
+      description: "Automate complex business processes",
+      href: "/features/workflows",
     },
   ];
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-16 items-center justify-between">
+    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur">
+      <div className="container flex items-center justify-between h-16 px-4 md:px-6">
         <div className="flex items-center gap-6 md:gap-8 lg:gap-10">
-          <Link href="/" className="flex items-center space-x-2">
+          <ClientNavigationLink href="/" className="flex items-center space-x-2" onClick={handleNavigation}>
             <div className="relative h-8 w-8 overflow-hidden rounded-full bg-gradient-to-br from-blue-500 to-indigo-600">
               <div className="absolute inset-1 rounded-full bg-background"></div>
               <div className="absolute inset-2 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600"></div>
             </div>
-            <span className="hidden font-bold sm:inline-block">ApexBase</span>
-          </Link>
-          <nav className="hidden gap-6 md:flex">
-            <NavigationMenu>
-              <NavigationMenuList>
-                <NavigationMenuItem>
-                  <NavigationMenuTrigger>Features</NavigationMenuTrigger>
-                  <NavigationMenuContent>
-                    <ul className="grid w-[400px] gap-3 p-4 md:w-[500px] md:grid-cols-2 lg:w-[600px]">
-                      {features.map((feature) => (
-                        <li key={feature.title}>
-                          <NavigationMenuLink asChild>
-                            <Link
-                              href={feature.href}
-                              className="block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
-                            >
-                              <div className="text-sm font-medium leading-none">
-                                {feature.title}
-                              </div>
-                              <p className="line-clamp-2 text-sm leading-snug text-muted-foreground">
-                                {feature.description}
-                              </p>
-                            </Link>
-                          </NavigationMenuLink>
-                        </li>
-                      ))}
-                    </ul>
-                  </NavigationMenuContent>
-                </NavigationMenuItem>
-                <NavigationMenuItem>
-                  <Link href="/pricing" legacyBehavior passHref>
-                    <NavigationMenuLink
-                      className={cn(
-                        "group inline-flex h-10 w-max items-center justify-center rounded-md bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50 data-[active]:bg-accent/50 data-[state=open]:bg-accent/50"
-                      )}
-                    >
-                      Pricing
-                    </NavigationMenuLink>
-                  </Link>
-                </NavigationMenuItem>
-                <NavigationMenuItem>
-                  <Link href="/docs" legacyBehavior passHref>
-                    <NavigationMenuLink
-                      className={cn(
-                        "group inline-flex h-10 w-max items-center justify-center rounded-md bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50 data-[active]:bg-accent/50 data-[state=open]:bg-accent/50"
-                      )}
-                    >
-                      Documentation
-                    </NavigationMenuLink>
-                  </Link>
-                </NavigationMenuItem>
-              </NavigationMenuList>
-            </NavigationMenu>
-          </nav>
+            <span className="font-bold">ApexBase</span>
+          </ClientNavigationLink>
+          <NavigationMenu className="hidden md:block">
+            <NavigationMenuList>
+              <NavigationMenuItem>
+                <NavigationMenuTrigger>Features</NavigationMenuTrigger>
+                <NavigationMenuContent>
+                  <ul className="grid gap-3 p-6 md:w-[400px] lg:w-[500px] lg:grid-cols-2">
+                    {features.map((feature) => (
+                      <li key={feature.title} className="row-span-3">
+                        <NavigationMenuLink asChild>
+                          <ClientNavigationLink
+                            href={feature.href}
+                            className="block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+                            onClick={handleNavigation}
+                          >
+                            <div className="text-sm font-medium leading-none">{feature.title}</div>
+                            <p className="line-clamp-2 text-sm leading-snug text-muted-foreground">
+                              {feature.description}
+                            </p>
+                          </ClientNavigationLink>
+                        </NavigationMenuLink>
+                      </li>
+                    ))}
+                  </ul>
+                </NavigationMenuContent>
+              </NavigationMenuItem>
+              <NavigationMenuItem>
+                <ClientNavigationLink
+                  href="/pricing"
+                  className={cn("flex items-center transition-colors hover:text-foreground/80 text-foreground/60 h-10 px-4 py-2")}
+                  onClick={handleNavigation}
+                >
+                  Pricing
+                </ClientNavigationLink>
+              </NavigationMenuItem>
+              <NavigationMenuItem>
+                <ClientNavigationLink
+                  href="/blog"
+                  className={cn("flex items-center transition-colors hover:text-foreground/80 text-foreground/60 h-10 px-4 py-2")}
+                  onClick={handleNavigation}
+                >
+                  Blog
+                </ClientNavigationLink>
+              </NavigationMenuItem>
+              <NavigationMenuItem>
+                <ClientNavigationLink
+                  href="/about"
+                  className={cn("flex items-center transition-colors hover:text-foreground/80 text-foreground/60 h-10 px-4 py-2")}
+                  onClick={handleNavigation}
+                >
+                  About
+                </ClientNavigationLink>
+              </NavigationMenuItem>
+            </NavigationMenuList>
+          </NavigationMenu>
         </div>
         <div className="flex items-center gap-2">
-          <div className="hidden md:flex md:items-center md:gap-2">
-            <ThemeToggle />
-            <Button variant="ghost" asChild>
-              <Link href="/login">Sign In</Link>
+          <ThemeToggle />
+          <div className="hidden md:flex md:gap-2">
+            <Button variant="ghost" disabled>
+              Sign In (Coming Soon)
             </Button>
-            <Button asChild>
-              <Link href="/registration">Get Started</Link>
+            <Button disabled>
+              Get Started (Coming Soon)
             </Button>
           </div>
           <Sheet>
@@ -143,13 +151,13 @@ export function Navbar() {
             </SheetTrigger>
             <SheetContent side="right" className="w-full sm:w-80">
               <div className="flex flex-col gap-6 py-6">
-                <Link href="/" className="flex items-center space-x-2">
+                <ClientNavigationLink href="/" className="flex items-center space-x-2" onClick={handleNavigation}>
                   <div className="relative h-8 w-8 overflow-hidden rounded-full bg-gradient-to-br from-blue-500 to-indigo-600">
                     <div className="absolute inset-1 rounded-full bg-background"></div>
                     <div className="absolute inset-2 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600"></div>
                   </div>
                   <span className="font-bold">ApexBase</span>
-                </Link>
+                </ClientNavigationLink>
                 <div className="flex flex-col space-y-4">
                   <div className="flex flex-col space-y-3">
                     <div className="flex items-center justify-between">
@@ -170,38 +178,35 @@ export function Navbar() {
                     {isOpen && (
                       <div className="grid gap-2 pl-1">
                         {features.map((feature) => (
-                          <Link
+                          <ClientNavigationLink
                             key={feature.title}
                             href={feature.href}
                             className="text-sm text-muted-foreground hover:text-foreground"
+                            onClick={handleNavigation}
                           >
                             {feature.title}
-                          </Link>
+                          </ClientNavigationLink>
                         ))}
                       </div>
                     )}
                   </div>
-                  <Link
-                    href="/pricing"
-                    className="text-base font-medium hover:text-foreground"
-                  >
+                  <ClientNavigationLink href="/pricing" className="text-sm font-medium" onClick={handleNavigation}>
                     Pricing
-                  </Link>
-                  <Link
-                    href="/docs"
-                    className="text-base font-medium hover:text-foreground"
-                  >
-                    Documentation
-                  </Link>
-                </div>
-                <div className="flex flex-col gap-3 pt-4">
-                  <ThemeToggle />
-                  <Button variant="outline" className="justify-start" asChild>
-                    <Link href="/login">Sign In</Link>
-                  </Button>
-                  <Button className="justify-start" asChild>
-                    <Link href="/registration">Get Started</Link>
-                  </Button>
+                  </ClientNavigationLink>
+                  <ClientNavigationLink href="/blog" className="text-sm font-medium" onClick={handleNavigation}>
+                    Blog
+                  </ClientNavigationLink>
+                  <ClientNavigationLink href="/about" className="text-sm font-medium" onClick={handleNavigation}>
+                    About
+                  </ClientNavigationLink>
+                  <div className="flex flex-col gap-2 pt-4">
+                    <Button variant="ghost" disabled>
+                      Sign In (Coming Soon)
+                    </Button>
+                    <Button disabled>
+                      Get Started (Coming Soon)
+                    </Button>
+                  </div>
                 </div>
               </div>
             </SheetContent>

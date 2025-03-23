@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, useRef, type ReactNode, memo } from 'react';
 
 interface ClientWrapperProps {
   children: ReactNode;
@@ -10,12 +10,24 @@ interface ClientWrapperProps {
 /**
  * A wrapper component that ensures its children are only rendered on the client side.
  * This helps avoid SSR-related issues with components that use useLayoutEffect.
+ *
+ * Memoized to prevent re-renders during navigation.
  */
-export function ClientWrapper({ children, fallback = null }: ClientWrapperProps) {
+export const ClientWrapper = memo(function ClientWrapper({
+  children,
+  fallback = null
+}: ClientWrapperProps) {
   const [isClient, setIsClient] = useState(false);
+  const isMountedRef = useRef(false);
 
   useEffect(() => {
-    setIsClient(true);
+    if (!isMountedRef.current) {
+      isMountedRef.current = true;
+      setIsClient(true);
+    }
+
+    // No need to reset anything on cleanup
+    return () => {};
   }, []);
 
   if (!isClient) {
@@ -23,4 +35,4 @@ export function ClientWrapper({ children, fallback = null }: ClientWrapperProps)
   }
 
   return <>{children}</>;
-} 
+});

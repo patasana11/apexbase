@@ -88,7 +88,7 @@ export default function RegisterPage() {
     setError(null);
 
     try {
-      const authService = new AuthService();
+      const authService = AuthService.getInstance();
 
       // First, register with GSB
       // Note: We need to implement a register method in AuthService

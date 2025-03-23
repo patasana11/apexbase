@@ -1,9 +1,17 @@
 [build]
-  command = "npx next build"
+  command = "bun run build"
   publish = ".next"
 
 [build.environment]
-  NETLIFY_NEXT_PLUGIN_SKIP = "true"
+  NEXT_PUBLIC_AZURE_OPENAI_API_KEY = ""
+  NEXT_PUBLIC_AZURE_OPENAI_ENDPOINT = ""
+  NEXT_PUBLIC_AZURE_OPENAI_DEPLOYMENT_ID = "gpt-4"
+
+  APEXBASE_GSB_API_URL = "https://dev1.gsbapps.net"
+  APEXBASE_GSB_TENANT_CODE = "apexbase"
+
+[images]
+  remote_images = ["*"]
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"

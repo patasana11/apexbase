@@ -24,7 +24,7 @@ export default function SocialLoginButtons({
   remember = false
 }: SocialLoginButtonsProps) {
   const [isLoading, setIsLoading] = useState<SocialProvider | null>(null);
-  const authService = new AuthService();
+  const authService = AuthService.getInstance();
 
   const handleSocialAuth = async (provider: SocialProvider, token: string) => {
     if (onLogin) {
@@ -55,7 +55,7 @@ export default function SocialLoginButtons({
         }
 
         const response = await authService.login(loginData);
-        
+
         if (!response.success) {
           throw new Error(response.error || 'Social authentication failed');
         }

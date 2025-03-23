@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { useEffect, useState, useRef } from 'react';
 import { AppInitializerService } from '@/lib/gsb/services/app-initializer.service';
 
 /**
@@ -12,23 +11,24 @@ import { AppInitializerService } from '@/lib/gsb/services/app-initializer.servic
  * In production, it sets up the tenant based on the hostname.
  */
 export default function TenantInitializer() {
-  const pathname = usePathname();
-  const [initialized, setInitialized] = useState(false);
+  const initializedRef = useRef(false);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || initialized) return;
+    if (typeof window === 'undefined' || initializedRef.current) return;
 
     try {
+      // Set the ref immediately to prevent double initialization
+      initializedRef.current = true;
+
       // Initialize the app with the AppInitializerService
       const appInitializer = AppInitializerService.getInstance();
       appInitializer.initialize();
-      
+
       console.log('App initialization completed');
-      setInitialized(true);
     } catch (error) {
       console.error('Error during initialization:', error);
     }
-  }, [pathname, initialized]);
+  }, []);
 
   // This component doesn't render anything
   return null;

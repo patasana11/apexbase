@@ -1,40 +1,35 @@
+// @ts-check
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Don't run type checking during build (speeds up build)
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  // Don't run ESLint during build
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-  // External URL domains
+  reactStrictMode: false,
   images: {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'images.unsplash.com',
-      },
-      {
-        protocol: 'https',
-        hostname: '*.gsbapps.net',
-      },
-      {
-        protocol: 'https',
-        hostname: 'randomuser.me',
-      },
-      {
-        protocol: 'https',
-        hostname: 'ui-avatars.com',
+        hostname: '**',
       },
     ],
   },
-  // Other options
-  reactStrictMode: true,
-  swcMinify: true,
-  // Experimental features
+  async redirects() {
+    return [
+      // Redirect any requests to the NextAuth API to prevent client-side auth calls
+      {
+        source: '/api/auth/:path*',
+        destination: '/',
+        permanent: false,
+      },
+    ];
+  },
+  // For Netlify deployments
+  output: 'standalone',
+  transpilePackages: ['lucide-react', 'vaul'],
   experimental: {
-    serverActions: true,
+    // Need this for stable client-side navigation
+    ppr: false,
+    serverActions: {
+      allowedOrigins: ['localhost:3000', 'apexbase.dev', '*.same-app.com'],
+    },
   },
 };
 

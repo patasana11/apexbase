@@ -5,6 +5,8 @@ import { QueryParams } from '../../types/query-params';
 import { GsbSaveRequest, GsbSaveMultiRequest, GsbSaveMappedRequest, GsbGetCodeRequest } from '../../types/requests';
 import { GsbQueryResponse, GsbSaveResponse, GsbQueryOpResponse, GsbSaveMultiResponse, GsbDefinitionResponse, GsbGetCodeResponse } from '../../types/responses';
 
+// Store a singleton instance
+let serviceInstance: GsbEntityService | null = null;
 
 interface GetTokenRequest {
     email: string;
@@ -37,8 +39,16 @@ export class GsbEntityService {
 
     constructor(baseUrl: string = 'https://dev1.gsbapps.net') {
         console.log('Initializing GsbEntityService with baseUrl:', baseUrl);
-        this.apiService = new GsbApiService();
+        this.apiService = GsbApiService.getInstance();
         this.baseUrl = baseUrl;
+    }
+
+    // Static method to get the singleton instance
+    static getInstance(baseUrl: string = 'https://dev1.gsbapps.net'): GsbEntityService {
+        if (!serviceInstance) {
+            serviceInstance = new GsbEntityService(baseUrl);
+        }
+        return serviceInstance;
     }
 
     async getToken(request: GetTokenRequest): Promise<AuthResponse> {

@@ -1,12 +1,23 @@
 'use client';
 
 import { GsbEntityService } from '../entity/gsb-entity.service';
-import { setGsbToken, setGsbTenantCode, clearGsbAuth, GSB_CONFIG } from '../../config/gsb-config';
+import {
+  setGsbToken,
+  setCommonGsbToken,
+  setUserGsbToken,
+  setGsbTenantCode,
+  clearGsbAuth,
+  GSB_CONFIG
+} from '../../config/gsb-config';
 
 // Local storage keys
-const TOKEN_STORAGE_KEY = 'gsb_auth_token';
+const COMMON_TOKEN_STORAGE_KEY = 'gsb_common_token';
+const USER_TOKEN_STORAGE_KEY = 'gsb_user_token';
 const TENANT_STORAGE_KEY = 'gsb_tenant_code';
 const USER_DATA_STORAGE_KEY = 'gsb_user_data';
+
+// Singleton instance
+let authServiceInstance: AuthService | null = null;
 
 export interface LoginCredentials {
   email: string;
@@ -23,6 +34,7 @@ export interface AuthResponse {
   success: boolean;
   token?: string;
   tenantCode?: string;
+  userTenantToken?: string;
   userData?: {
     userId: string;
     name: string;
@@ -37,12 +49,21 @@ export interface AuthResponse {
 
 export class AuthService {
   private gsbService: GsbEntityService;
-  private token: string | null = null;
+  private commonToken: string | null = null;
+  private userToken: string | null = null;
   private tenantCode: string | null = null;
 
-  constructor() {
-    this.gsbService = new GsbEntityService();
+  private constructor() {
+    this.gsbService = GsbEntityService.getInstance();
     this.initFromStorage();
+    console.log('Auth initialized from localStorage');
+  }
+
+  public static getInstance(): AuthService {
+    if (!authServiceInstance) {
+      authServiceInstance = new AuthService();
+    }
+    return authServiceInstance;
   }
 
   /**
@@ -51,15 +72,25 @@ export class AuthService {
   private initFromStorage(): void {
     if (typeof window !== 'undefined') {
       try {
-        const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+        const commonToken = localStorage.getItem(COMMON_TOKEN_STORAGE_KEY);
+        const userToken = localStorage.getItem(USER_TOKEN_STORAGE_KEY);
         const tenantCode = localStorage.getItem(TENANT_STORAGE_KEY);
 
-        if (token && tenantCode) {
-          this.token = token;
+        if (commonToken) {
+          this.commonToken = commonToken;
+          setCommonGsbToken(commonToken);
+          console.log('Common token initialized from localStorage');
+        }
+
+        if (userToken && tenantCode) {
+          this.userToken = userToken;
           this.tenantCode = tenantCode;
-          setGsbToken(token);
+          setUserGsbToken(userToken);
           setGsbTenantCode(tenantCode);
-          console.log('Auth initialized from localStorage');
+          console.log('User token and tenant initialized from localStorage');
+        } else if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_SKIP_GSB_AUTH === 'true') {
+          // In development mode with skip auth, initialize with dev token
+          this.setupDevAuth();
         }
       } catch (error) {
         console.error('Error initializing from localStorage:', error);
@@ -68,35 +99,103 @@ export class AuthService {
   }
 
   /**
-   * Save authentication data to localStorage
-   * @param token JWT token
-   * @param tenantCode Tenant code
-   * @param userData User data
-   * @param remember Whether to persist in localStorage
+   * Setup development auth with fake token
    */
-  private saveToStorage(token: string, tenantCode: string, userData: any, remember: boolean): void {
-    if (typeof window !== 'undefined' && remember) {
+  private setupDevAuth(): void {
+    console.log('Setting up development auth environment');
+    const devCommonToken = 'dev-common-token-' + Date.now();
+    const devUserToken = 'dev-user-token-' + Date.now();
+    const devTenantCode = process.env.NEXT_PUBLIC_DEFAULT_TENANT_CODE || 'apexbase';
+
+    this.commonToken = devCommonToken;
+    this.userToken = devUserToken;
+    this.tenantCode = devTenantCode;
+
+    setCommonGsbToken(devCommonToken);
+    setUserGsbToken(devUserToken);
+    setGsbTenantCode(devTenantCode);
+
+    // Store fake user data for development
+    const devUserData = {
+      userId: 'dev-user',
+      name: 'Development User',
+      email: 'admin@apexbase.dev',
+      roles: ['admin', 'developer'],
+      groups: ['all'],
+      expireDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      title: 'Developer'
+    };
+
+    this.saveToStorage(devCommonToken, devUserToken, devTenantCode, devUserData, true);
+    console.log('Development auth environment set up successfully');
+  }
+
+  /**
+   * Save authentication data to localStorage
+   * For SPA client-side navigation, we need to ensure data is always in memory and localStorage
+   */
+  private saveToStorage(
+    commonToken: string,
+    userToken: string | null,
+    tenantCode: string,
+    userData: any,
+    remember: boolean
+  ): void {
+    // Always update memory state regardless of remember flag
+    this.commonToken = commonToken;
+    this.userToken = userToken;
+    this.tenantCode = tenantCode;
+
+    // Set in global config
+    setCommonGsbToken(commonToken);
+    if (userToken) {
+      setUserGsbToken(userToken);
+    }
+    setGsbTenantCode(tenantCode);
+
+    if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem(TOKEN_STORAGE_KEY, token);
-        localStorage.setItem(TENANT_STORAGE_KEY, tenantCode);
-        localStorage.setItem(USER_DATA_STORAGE_KEY, JSON.stringify(userData));
+        // For SPA experience, always save to sessionStorage
+        sessionStorage.setItem(COMMON_TOKEN_STORAGE_KEY, commonToken);
+        if (userToken) {
+          sessionStorage.setItem(USER_TOKEN_STORAGE_KEY, userToken);
+        }
+        sessionStorage.setItem(TENANT_STORAGE_KEY, tenantCode);
+        sessionStorage.setItem(USER_DATA_STORAGE_KEY, JSON.stringify(userData));
+
+        // If remember is true, also save to localStorage for persistence across sessions
+        if (remember) {
+          localStorage.setItem(COMMON_TOKEN_STORAGE_KEY, commonToken);
+          if (userToken) {
+            localStorage.setItem(USER_TOKEN_STORAGE_KEY, userToken);
+          }
+          localStorage.setItem(TENANT_STORAGE_KEY, tenantCode);
+          localStorage.setItem(USER_DATA_STORAGE_KEY, JSON.stringify(userData));
+        }
       } catch (error) {
-        console.error('Error saving to localStorage:', error);
+        console.error('Error saving auth data to storage:', error);
       }
     }
   }
 
   /**
-   * Clear authentication data from localStorage
+   * Clear authentication data from storage
    */
   private clearStorage(): void {
     if (typeof window !== 'undefined') {
       try {
-        localStorage.removeItem(TOKEN_STORAGE_KEY);
+        // Clear from both localStorage and sessionStorage
+        localStorage.removeItem(COMMON_TOKEN_STORAGE_KEY);
+        localStorage.removeItem(USER_TOKEN_STORAGE_KEY);
         localStorage.removeItem(TENANT_STORAGE_KEY);
         localStorage.removeItem(USER_DATA_STORAGE_KEY);
+
+        sessionStorage.removeItem(COMMON_TOKEN_STORAGE_KEY);
+        sessionStorage.removeItem(USER_TOKEN_STORAGE_KEY);
+        sessionStorage.removeItem(TENANT_STORAGE_KEY);
+        sessionStorage.removeItem(USER_DATA_STORAGE_KEY);
       } catch (error) {
-        console.error('Error clearing localStorage:', error);
+        console.error('Error clearing storage:', error);
       }
     }
   }
@@ -106,7 +205,12 @@ export class AuthService {
    * @returns True if authenticated
    */
   isAuthenticated(): boolean {
-    return !!this.token;
+    // For development mode, always return true if SKIP_GSB_AUTH is true
+    if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_SKIP_GSB_AUTH === 'true') {
+      return true;
+    }
+    // User is authenticated if they have at least a common token
+    return !!this.commonToken;
   }
 
   /**
@@ -115,6 +219,47 @@ export class AuthService {
    * @returns Authentication response
    */
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
+    // Handle development mode with skip auth
+    if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_SKIP_GSB_AUTH === 'true') {
+      console.log('Development mode: Using fake authentication');
+
+      // Create a fake authentication response
+      const { email, tenantCode, remember = true } = credentials;
+      const devCommonToken = 'dev-common-token-' + Date.now();
+      const devUserToken = 'dev-user-token-' + Date.now();
+
+      this.commonToken = devCommonToken;
+      this.userToken = devUserToken;
+      this.tenantCode = tenantCode;
+
+      // Set in global config
+      setCommonGsbToken(devCommonToken);
+      setUserGsbToken(devUserToken);
+      setGsbTenantCode(tenantCode);
+
+      const userData = {
+        userId: 'dev-user',
+        name: email.split('@')[0],
+        email: email,
+        roles: ['admin', 'developer'],
+        groups: ['all'],
+        expireDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        title: 'Developer'
+      };
+
+      this.saveToStorage(devCommonToken, devUserToken, tenantCode, userData, remember);
+
+      console.log('Development authentication successful');
+      return {
+        success: true,
+        token: devCommonToken,
+        userTenantToken: devUserToken,
+        tenantCode,
+        userData
+      };
+    }
+
+    // Normal authentication process
     try {
       const { email, password, tenantCode, remember = true, googleToken, facebookToken, appleToken } = credentials;
 
@@ -146,13 +291,22 @@ export class AuthService {
       const response = await this.gsbService.getToken(request);
 
       if (response?.auth?.token) {
-        // Store authentication data
-        this.token = response.auth.token;
+        // Store common token
+        const commonToken = response.auth.token;
+        this.commonToken = commonToken;
         this.tenantCode = tenantCode;
 
         // Set in global config
-        setGsbToken(response.auth.token);
+        setCommonGsbToken(commonToken);
         setGsbTenantCode(tenantCode);
+
+        // Now check if we have a user tenant token
+        let userToken = null;
+        if (response.auth.tenantToken) {
+          userToken = response.auth.tenantToken;
+          this.userToken = userToken;
+          setUserGsbToken(userToken);
+        }
 
         // Save to localStorage if remember is true
         const userData = {
@@ -165,11 +319,12 @@ export class AuthService {
           title: response.auth.title
         };
 
-        this.saveToStorage(response.auth.token, tenantCode, userData, remember);
+        this.saveToStorage(commonToken, userToken, tenantCode, userData, remember);
 
         return {
           success: true,
-          token: response.auth.token,
+          token: commonToken,
+          userTenantToken: userToken,
           tenantCode,
           userData
         };
@@ -192,7 +347,8 @@ export class AuthService {
    * Log out the current user
    */
   logout(): void {
-    this.token = null;
+    this.commonToken = null;
+    this.userToken = null;
     this.tenantCode = null;
     clearGsbAuth();
     this.clearStorage();
@@ -204,6 +360,17 @@ export class AuthService {
    * @returns Decoded user information or null if invalid
    */
   getUserFromToken(token: string): any {
+    // For development token, return fake user data
+    if (token.startsWith('dev-token') || token.startsWith('dev-common-token') || token.startsWith('dev-user-token')) {
+      return {
+        userId: 'dev-user',
+        name: 'Development User',
+        email: 'admin@apexbase.dev',
+        roles: ['admin', 'developer'],
+        groups: ['all'],
+      };
+    }
+
     try {
       const base64Url = token.split('.')[1];
       const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
@@ -226,11 +393,16 @@ export class AuthService {
    * @returns True if user has the role
    */
   hasRole(role: string): boolean {
-    if (!this.token) {
+    // In development mode with bypass, always return true for role checks
+    if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_SKIP_GSB_AUTH === 'true') {
+      return true;
+    }
+
+    if (!this.commonToken) {
       return false;
     }
 
-    const userData = this.getUserFromToken(this.token);
+    const userData = this.getUserFromToken(this.commonToken);
     if (!userData || !userData.roles) {
       return false;
     }
@@ -242,41 +414,184 @@ export class AuthService {
    * @returns Tenant code or undefined
    */
   getCurrentTenantCode(): string | undefined {
-    if (!this.token) {
-      return undefined;
+    if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_SKIP_GSB_AUTH === 'true') {
+      return process.env.NEXT_PUBLIC_DEFAULT_TENANT_CODE || 'apexbase';
     }
-    return GSB_CONFIG.extractTenantCode(this.token);
+
+    if (this.tenantCode) {
+      return this.tenantCode;
+    }
+
+    if (this.userToken) {
+      return GSB_CONFIG.extractTenantCode(this.userToken);
+    }
+
+    return undefined;
   }
 
   /**
-   * Get the current auth token
-   * @returns The current auth token or null if not authenticated
+   * Get the current auth token based on path context
+   * @param pathContext Optional path context to determine which token to use
+   * @returns The appropriate auth token or null if not authenticated
    */
-  getToken(): string | null {
-    // If token not loaded yet, try to load from localStorage
-    if (!this.token && typeof window !== 'undefined') {
-      const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
-      if (storedToken) {
-        this.token = storedToken;
+  getToken(pathContext?: string): string | null {
+    // Check if we should use the common token based on the path
+    const useCommonToken = this.shouldUseCommonToken(pathContext);
+
+    // For development with skip auth, always return a dev token
+    if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_SKIP_GSB_AUTH === 'true') {
+      if (useCommonToken) {
+        if (!this.commonToken) {
+          const devToken = 'dev-common-token-' + Date.now();
+          this.commonToken = devToken;
+          setCommonGsbToken(devToken);
+        }
+        return this.commonToken;
+      } else {
+        if (!this.userToken) {
+          const devToken = 'dev-user-token-' + Date.now();
+          this.userToken = devToken;
+          setUserGsbToken(devToken);
+        }
+        return this.userToken;
       }
     }
-    return this.token;
+
+    // Regular token retrieval logic
+    if (useCommonToken) {
+      // If token not loaded yet, try to load from storage
+      if (!this.commonToken && typeof window !== 'undefined') {
+        // First check sessionStorage (for current session)
+        const sessionToken = sessionStorage.getItem(COMMON_TOKEN_STORAGE_KEY);
+        if (sessionToken) {
+          console.log('Retrieved common token from sessionStorage for SPA navigation');
+          this.commonToken = sessionToken;
+          setCommonGsbToken(sessionToken);
+          return this.commonToken;
+        }
+
+        // Then check localStorage (for remembered login)
+        const localToken = localStorage.getItem(COMMON_TOKEN_STORAGE_KEY);
+        if (localToken) {
+          console.log('Retrieved common token from localStorage for remembered login');
+          this.commonToken = localToken;
+          setCommonGsbToken(localToken);
+
+          // Also save to sessionStorage for better SPA support
+          try {
+            sessionStorage.setItem(COMMON_TOKEN_STORAGE_KEY, localToken);
+          } catch (e) {
+            console.error('Failed to save common token to sessionStorage:', e);
+          }
+        }
+      }
+      return this.commonToken;
+    } else {
+      // Try to get user tenant token
+      if (!this.userToken && typeof window !== 'undefined') {
+        // First check sessionStorage (for current session)
+        const sessionToken = sessionStorage.getItem(USER_TOKEN_STORAGE_KEY);
+        if (sessionToken) {
+          console.log('Retrieved user token from sessionStorage for SPA navigation');
+          this.userToken = sessionToken;
+          setUserGsbToken(sessionToken);
+          return this.userToken;
+        }
+
+        // Then check localStorage (for remembered login)
+        const localToken = localStorage.getItem(USER_TOKEN_STORAGE_KEY);
+        if (localToken) {
+          console.log('Retrieved user token from localStorage for remembered login');
+          this.userToken = localToken;
+          setUserGsbToken(localToken);
+
+          // Also save to sessionStorage for better SPA support
+          try {
+            sessionStorage.setItem(USER_TOKEN_STORAGE_KEY, localToken);
+          } catch (e) {
+            console.error('Failed to save user token to sessionStorage:', e);
+          }
+        }
+      }
+
+      // If no user token is available, fall back to common token
+      return this.userToken || this.commonToken;
+    }
   }
 
   /**
-   * Get the current user data from localStorage
+   * Determine if the common token should be used based on the path
+   * @param path The current path
+   * @returns True if common token should be used
+   */
+  private shouldUseCommonToken(path?: string): boolean {
+    const COMMON_TOKEN_PATHS = [
+      '/api/auth',
+      '/login',
+      '/register',
+      '/forgot-password',
+      '/registration',
+      '/account'
+    ];
+
+    if (!path) {
+      // Get the current path if running in browser
+      if (typeof window !== 'undefined') {
+        path = window.location.pathname;
+      } else {
+        // Default to not using common token if no path available
+        return false;
+      }
+    }
+
+    // Check if path starts with any of the common token paths
+    return COMMON_TOKEN_PATHS.some(prefix => path?.startsWith(prefix));
+  }
+
+  /**
+   * Get the current user data from storage
    * @returns User data or null
    */
   getCurrentUser(): any {
+    // For development with skip auth, return fake user data
+    if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_SKIP_GSB_AUTH === 'true') {
+      return {
+        userId: 'dev-user',
+        name: 'Development User',
+        email: 'admin@apexbase.dev',
+        roles: ['admin', 'developer'],
+        groups: ['all'],
+        expireDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        title: 'Developer'
+      };
+    }
+
     if (typeof window === 'undefined') {
       return null;
     }
 
     try {
-      const userData = localStorage.getItem(USER_DATA_STORAGE_KEY);
+      // First check sessionStorage for current session
+      let userData = sessionStorage.getItem(USER_DATA_STORAGE_KEY);
+
+      // If not found in sessionStorage, check localStorage
+      if (!userData) {
+        userData = localStorage.getItem(USER_DATA_STORAGE_KEY);
+
+        // If found in localStorage but not in sessionStorage,
+        // also save to sessionStorage for better SPA support
+        if (userData) {
+          try {
+            sessionStorage.setItem(USER_DATA_STORAGE_KEY, userData);
+          } catch (e) {
+            console.error('Failed to save user data to sessionStorage:', e);
+          }
+        }
+      }
+
       return userData ? JSON.parse(userData) : null;
     } catch (error) {
-      console.error('Error getting user data from localStorage:', error);
+      console.error('Error getting user data from storage:', error);
       return null;
     }
   }
