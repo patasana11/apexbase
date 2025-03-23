@@ -4,6 +4,7 @@ import { GsbApiService } from '../../api/gsb-api.service';
 import { QueryParams } from '../../types/query-params';
 import { GsbSaveRequest, GsbSaveMultiRequest, GsbSaveMappedRequest, GsbGetCodeRequest } from '../../types/requests';
 import { GsbQueryResponse, GsbSaveResponse, GsbQueryOpResponse, GsbSaveMultiResponse, GsbDefinitionResponse, GsbGetCodeResponse } from '../../types/responses';
+import { GSB_CONFIG } from '../../config/gsb-config';
 
 // Store a singleton instance
 let serviceInstance: GsbEntityService | null = null;
@@ -20,6 +21,8 @@ interface GetTokenRequest {
 
 interface AuthResponse {
     auth: {
+        userTenant: any;
+        userToken: any;
         userId: string;
         token: string;
         name: string;
@@ -35,66 +38,38 @@ interface AuthResponse {
 
 export class GsbEntityService {
     private apiService: GsbApiService;
-    private baseUrl: string;
 
-    constructor(baseUrl: string = 'https://dev1.gsbapps.net') {
-        console.log('Initializing GsbEntityService with baseUrl:', baseUrl);
+    constructor() {
+        console.log('Initializing GsbEntityService');
         this.apiService = GsbApiService.getInstance();
-        this.baseUrl = baseUrl;
     }
 
     // Static method to get the singleton instance
-    static getInstance(baseUrl: string = 'https://dev1.gsbapps.net'): GsbEntityService {
+    static getInstance(): GsbEntityService {
         if (!serviceInstance) {
-            serviceInstance = new GsbEntityService(baseUrl);
+            serviceInstance = new GsbEntityService();
         }
         return serviceInstance;
     }
 
     async getToken(request: GetTokenRequest): Promise<AuthResponse> {
-        console.log('Getting token from:', `${this.baseUrl}/api/auth/getToken`);
+        console.log('Getting token from AUTH_URL:', `${GSB_CONFIG.AUTH_URL}/api/auth/getToken`);
+        
         try {
-            const response = await fetch(`${this.baseUrl}/api/auth/getToken`, {
+            // Use apiService for consistency
+            const tenantCode = request.variation?.tenantCode || GSB_CONFIG.COMMON_TENANT;
+            const response = await this.apiService.callApi({
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(request)
-            });
-
-            if (!response.ok) {
-                throw new Error(`Authentication failed: ${response.statusText}`);
-            }
-
-            return response.json();
+                protocol: 'https',
+                hostName: 'api',
+                content: request,
+                jsonResponse: true,
+                noAuth: true
+            }, '/api/auth/getToken', undefined, tenantCode);
+            
+            return response as AuthResponse;
         } catch (error) {
             console.error('Authentication request failed:', error);
-            throw error;
-        }
-    }
-
-    private async makeRequest(endpoint: string, method: string, token: string, tenant: string, body?: any): Promise<any> {
-        console.log(`Making request to: ${this.baseUrl}${endpoint}, tenant: ${tenant}`);
-        try {
-            const response = await fetch(`${this.baseUrl}${endpoint}`, {
-                method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                    'X-Tenant': tenant
-                },
-                body: body ? JSON.stringify(body) : undefined
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text().catch(() => 'No error details available');
-                console.error(`HTTP error! status: ${response.status}, details:`, errorText);
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            return response.json();
-        } catch (error) {
-            console.error(`Request to ${endpoint} failed:`, error);
             throw error;
         }
     }

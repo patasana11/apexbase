@@ -59,8 +59,6 @@ import { useRouter } from "next/navigation";
 import { createClientComponent } from "@/components/dynamic-component";
 
 // Constants
-const GSB_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiJiZjE1MjRiNy04MjBmLTQ2NGYtOWYzNC02ZWQ2Y2Q5NjVlNjEiLCJ0YyI6ImRldjEiLCJpIjoiOThCNUU0OUQiLCJleHAiOjE3NDMwMDcwMzQsImlzcyI6IkBnc2IifQ.0WImy6Y1XmC0RwJPG-Y3teTlAA4wL17rgDYARyySciQ";
-const GSB_TENANT = "dev1";
 
 function DatabasePageContent() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -81,38 +79,7 @@ function DatabasePageContent() {
   }, []);
 
   // Initialize token and service when component mounts
-  useEffect(() => {
-    if (!isClient) return;
 
-    console.log("Setting up GSB token and tenant code...");
-
-    try {
-      // Set the GSB token and tenant code for the service to use
-      setGsbToken(GSB_TOKEN);
-      setGsbTenantCode(GSB_TENANT);
-
-      // Parse JWT token to confirm it's valid
-      const tokenParts = GSB_TOKEN.split('.');
-      if (tokenParts.length === 3) {
-        const payload = JSON.parse(atob(tokenParts[1]));
-        console.log("Token payload:", payload);
-        setDebugInfo(`Token tenant: ${payload.tc}, uid: ${payload.uid}, expiry: ${new Date(payload.exp * 1000).toLocaleString()}`);
-      } else {
-        console.error("Invalid token format, doesn't have 3 parts");
-        setDebugInfo("Invalid token format");
-        setError("Invalid token format");
-      }
-    } catch (error) {
-      console.error("Error setting up GSB token:", error);
-      setDebugInfo(`Error setting up GSB token: ${error}`);
-      setError(`Failed to initialize: ${error instanceof Error ? error.message : String(error)}`);
-      return;
-    }
-
-    // Initial data fetch
-    console.log("Running initial data fetch...");
-    fetchEntityDefs(currentPage, searchQuery);
-  }, [isClient]);
 
   // Update when page changes
   useEffect(() => {
@@ -129,10 +96,6 @@ function DatabasePageContent() {
     setError(null);
 
     try {
-      // Check if token is set before making the request
-      if (!GSB_TOKEN) {
-        throw new Error("GSB Token not available");
-      }
 
       console.log(`Fetching entity definitions - page: ${page}, search: ${search}`);
 

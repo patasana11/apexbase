@@ -1,5 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import TokenDisplay from './token-display';
+import { GSB_CONFIG } from '@/lib/gsb/config/gsb-config';
 
 /**
  * Test GSB Integration Page
@@ -7,6 +8,10 @@ import TokenDisplay from './token-display';
  * This page is for testing GSB API integration and token management.
  */
 export default function TestGsbPage() {
+  const commonTenant = GSB_CONFIG.COMMON_TENANT;
+  const defaultTenant = GSB_CONFIG.DEFAULT_TENANT;
+  const baseDomain = GSB_CONFIG.BASE_DOMAIN;
+  
   return (
     <div className="container mx-auto py-10 space-y-8">
       <h1 className="text-3xl font-bold mb-6">GSB Integration Test</h1>
@@ -35,8 +40,8 @@ export default function TestGsbPage() {
             When a user logs in, they receive two tokens if they have access to a tenant:
           </p>
           <ul className="list-disc pl-5 space-y-2">
-            <li>The common token provides access to the common tenant (common.gsbapps.net)</li>
-            <li>The user tenant token provides access to the user's specific tenant (e.g., apexbase.gsbapps.net)</li>
+            <li>The common token provides access to the common tenant ({commonTenant}.{baseDomain})</li>
+            <li>The user tenant token provides access to the user's specific tenant (e.g., {defaultTenant}.{baseDomain})</li>
           </ul>
 
           <p className="mt-4">

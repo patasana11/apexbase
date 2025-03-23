@@ -33,6 +33,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PlanSelector } from "@/components/plan-selector";
 import { DEFAULT_PLANS, paddleService } from '@/lib/gsb/services/subscription/paddle.service';
 import { AuthService } from '@/lib/gsb/services/auth/auth.service';
+import { GSB_CONFIG } from '@/lib/gsb/config/gsb-config';
 
 // Registration form schema with validation
 const registerSchema = z.object({
@@ -91,9 +92,8 @@ export default function RegisterPage() {
       const authService = AuthService.getInstance();
 
       // First, register with GSB
-      // Note: We need to implement a register method in AuthService
-      // For now, we'll use a direct API call
-      const response = await fetch(`${process.env.NEXT_PUBLIC_GSB_API_URL || 'https://common.gsbapps.net'}/auth/register`, {
+      // Use the AUTH_URL from GSB_CONFIG
+      const response = await fetch(`${GSB_CONFIG.AUTH_URL}/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

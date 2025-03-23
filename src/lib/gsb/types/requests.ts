@@ -38,4 +38,5 @@ export interface HttpCallRequest {
     contentType?: string;
     headers?: Record<string, string>;
     jsonResponse?: boolean;
+    noAuth?: boolean;
 } 

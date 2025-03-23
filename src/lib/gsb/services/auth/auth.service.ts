@@ -88,47 +88,13 @@ export class AuthService {
           setUserGsbToken(userToken);
           setGsbTenantCode(tenantCode);
           console.log('User token and tenant initialized from localStorage');
-        } else if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_SKIP_GSB_AUTH === 'true') {
-          // In development mode with skip auth, initialize with dev token
-          this.setupDevAuth();
-        }
+        } 
       } catch (error) {
         console.error('Error initializing from localStorage:', error);
       }
     }
   }
 
-  /**
-   * Setup development auth with fake token
-   */
-  private setupDevAuth(): void {
-    console.log('Setting up development auth environment');
-    const devCommonToken = 'dev-common-token-' + Date.now();
-    const devUserToken = 'dev-user-token-' + Date.now();
-    const devTenantCode = process.env.NEXT_PUBLIC_DEFAULT_TENANT_CODE || 'apexbase';
-
-    this.commonToken = devCommonToken;
-    this.userToken = devUserToken;
-    this.tenantCode = devTenantCode;
-
-    setCommonGsbToken(devCommonToken);
-    setUserGsbToken(devUserToken);
-    setGsbTenantCode(devTenantCode);
-
-    // Store fake user data for development
-    const devUserData = {
-      userId: 'dev-user',
-      name: 'Development User',
-      email: 'admin@apexbase.dev',
-      roles: ['admin', 'developer'],
-      groups: ['all'],
-      expireDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      title: 'Developer'
-    };
-
-    this.saveToStorage(devCommonToken, devUserToken, devTenantCode, devUserData, true);
-    console.log('Development auth environment set up successfully');
-  }
 
   /**
    * Save authentication data to localStorage
@@ -220,44 +186,6 @@ export class AuthService {
    */
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     // Handle development mode with skip auth
-    if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_SKIP_GSB_AUTH === 'true') {
-      console.log('Development mode: Using fake authentication');
-
-      // Create a fake authentication response
-      const { email, tenantCode, remember = true } = credentials;
-      const devCommonToken = 'dev-common-token-' + Date.now();
-      const devUserToken = 'dev-user-token-' + Date.now();
-
-      this.commonToken = devCommonToken;
-      this.userToken = devUserToken;
-      this.tenantCode = tenantCode;
-
-      // Set in global config
-      setCommonGsbToken(devCommonToken);
-      setUserGsbToken(devUserToken);
-      setGsbTenantCode(tenantCode);
-
-      const userData = {
-        userId: 'dev-user',
-        name: email.split('@')[0],
-        email: email,
-        roles: ['admin', 'developer'],
-        groups: ['all'],
-        expireDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-        title: 'Developer'
-      };
-
-      this.saveToStorage(devCommonToken, devUserToken, tenantCode, userData, remember);
-
-      console.log('Development authentication successful');
-      return {
-        success: true,
-        token: devCommonToken,
-        userTenantToken: devUserToken,
-        tenantCode,
-        userData
-      };
-    }
 
     // Normal authentication process
     try {
@@ -268,7 +196,7 @@ export class AuthService {
         remember,
         includeUserInfo: true,
         variation: {
-          tenantCode
+          tenantCode : process.env.NEXT_PUBLIC_GSB_COMMON_TENANT || 'common'
         }
       };
 
@@ -302,8 +230,8 @@ export class AuthService {
 
         // Now check if we have a user tenant token
         let userToken = null;
-        if (response.auth.tenantToken) {
-          userToken = response.auth.tenantToken;
+        if (response.auth.userToken) {
+          userToken = response.auth.userToken;
           this.userToken = userToken;
           setUserGsbToken(userToken);
         }
@@ -319,7 +247,9 @@ export class AuthService {
           title: response.auth.title
         };
 
-        this.saveToStorage(commonToken, userToken, tenantCode, userData, remember);
+        const userTenant = response.auth.userTenant;
+
+        this.saveToStorage(commonToken, userToken, userTenant, userData, remember);
 
         return {
           success: true,

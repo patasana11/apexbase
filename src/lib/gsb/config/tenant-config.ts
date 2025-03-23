@@ -5,21 +5,27 @@
 
 import { setGsbToken, setGsbTenantCode } from './gsb-config';
 
-// Constants
-export const COMMON_TENANT = 'common';
-export const DEV_TENANT = 'dev1';
-
-// Tenant tokens for development mode
-const DEV_TOKENS = {
-  common: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiJiZjE1MjRiNy04MjBmLTQ2NGYtOWYzNC02ZWQ2Y2Q5NjVlNjEiLCJ0YyI6ImNvbW1vbiIsImlzcyI6IkBnc2IifQ.7k1Kj-6RGF09xwXKrJMFdC32_4B--cDkQGKI-7_6yNM",
-  dev1: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiJiZjE1MjRiNy04MjBmLTQ2NGYtOWYzNC02ZWQ2Y2Q5NjVlNjEiLCJ0YyI6ImRldjEiLCJpIjoiOThCNUU0OUQiLCJleHAiOjE3NDMwMDcwMzQsImlzcyI6IkBnc2IifQ.0WImy6Y1XmC0RwJPG-Y3teTlAA4wL17rgDYARyySciQ"
-};
-
 // Storage keys
 const STORAGE_KEYS = {
   tokenPrefix: 'gsb_token_',
   currentTenant: 'current_tenant'
 };
+
+// Environment variable names
+const ENV = {
+  DEFAULT_TENANT: 'GSB_DEFAULT_TENANT',
+  TOKEN_PREFIX: 'GSB_TOKEN_'
+};
+
+/**
+ * Get default tenant from environment or use 'default' as fallback
+ */
+export function getDefaultTenant(): string {
+  if (typeof process !== 'undefined' && process.env && process.env[ENV.DEFAULT_TENANT]) {
+    return process.env[ENV.DEFAULT_TENANT] || 'default';
+  }
+  return 'default';
+}
 
 /**
  * Parse tenant code from hostname
@@ -35,7 +41,23 @@ export function getTenantFromHostname(hostname: string): string | null {
     return parts[0];
   }
 
-  // Otherwise it's the main domain (common tenant)
+  // Otherwise it's the main domain (default tenant)
+  return null;
+}
+
+/**
+ * Get a token from environment variables based on tenant code
+ * @param tenantCode The tenant code
+ * @returns The token from environment if available, or null
+ */
+export function getEnvToken(tenantCode: string): string | null {
+  // Try to get from environment using the format GSB_TOKEN_[TENANTCODE]
+  const envVarName = `${ENV.TOKEN_PREFIX}${tenantCode.toUpperCase()}`;
+  
+  if (typeof process !== 'undefined' && process.env) {
+    return process.env[envVarName] || null;
+  }
+  
   return null;
 }
 
@@ -47,19 +69,25 @@ export function getTenantFromHostname(hostname: string): string | null {
  */
 export function setupTenant(hostname: string, isDevMode: boolean = process.env.NODE_ENV === 'development'): string {
   const tenantFromHostname = getTenantFromHostname(hostname);
-  let currentTenant = tenantFromHostname || COMMON_TENANT;
+  let currentTenant = tenantFromHostname || getDefaultTenant();
 
   // Store the current tenant
   if (typeof window !== 'undefined') {
     localStorage.setItem(STORAGE_KEYS.currentTenant, currentTenant);
   }
 
-  // In development mode, set up tokens automatically
+  // In development mode, try to set up tokens from environment variables
   if (isDevMode) {
-    const token = DEV_TOKENS[currentTenant] || DEV_TOKENS[DEV_TENANT];
-    setGsbToken(token);
-    setGsbTenantCode(currentTenant);
-    console.log(`[DEV] Set up tenant: ${currentTenant}`);
+    // Try to get token from environment variables
+    const token = getEnvToken(currentTenant);
+    
+    if (token) {
+      setGsbToken(token);
+      setGsbTenantCode(currentTenant);
+      console.log(`[DEV] Set up tenant: ${currentTenant} using environment token`);
+    } else {
+      console.log(`[DEV] No token found for tenant: ${currentTenant}. Authentication will be required.`);
+    }
   }
 
   return currentTenant;
@@ -73,7 +101,7 @@ export function setupTenant(hostname: string, isDevMode: boolean = process.env.N
 export function shouldInitTenant(desiredTenant: string): boolean {
   if (typeof window === 'undefined') return false;
 
-  const currentTenant = localStorage.getItem(STORAGE_KEYS.currentTenant) || COMMON_TENANT;
+  const currentTenant = localStorage.getItem(STORAGE_KEYS.currentTenant) || getDefaultTenant();
   return currentTenant === desiredTenant;
 }
 
@@ -136,8 +164,8 @@ export function switchTenant(tenant: string, token?: string): boolean {
  * @returns Current tenant code
  */
 export function getCurrentTenant(): string {
-  if (typeof window === 'undefined') return COMMON_TENANT;
-  return localStorage.getItem(STORAGE_KEYS.currentTenant) || COMMON_TENANT;
+  if (typeof window === 'undefined') return getDefaultTenant();
+  return localStorage.getItem(STORAGE_KEYS.currentTenant) || getDefaultTenant();
 }
 
 /**

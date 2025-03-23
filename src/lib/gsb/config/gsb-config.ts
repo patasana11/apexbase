@@ -2,10 +2,12 @@
  * GSB Configuration
  */
 
+import { getDefaultTenant } from './tenant-config';
+
 // GSB Authentication
 let _commonToken: string | null = null;
 let _userToken: string | null = null;
-let _commonTenantCode: string = 'common';
+let _commonTenantCode: string = process.env.NEXT_PUBLIC_GSB_COMMON_TENANT || getDefaultTenant();
 let _userTenantCode: string | null = null;
 
 // Path prefixes for determining which token to use
@@ -69,10 +71,7 @@ export function getGsbToken(path?: string): string {
 
   if (useCommonToken) {
     if (!_commonToken) {
-      console.warn('Common GSB Token not set - using fallback for development');
-      return process.env.NODE_ENV === 'development'
-        ? 'dev-fallback-common-token'
-        : throwError('Common GSB Token not set');
+      throw new Error('Common GSB Token not set');
     }
     return _commonToken;
   } else {
@@ -82,10 +81,7 @@ export function getGsbToken(path?: string): string {
         console.warn('User GSB Token not set - falling back to common token');
         return _commonToken;
       }
-      console.warn('No GSB Token available - using fallback for development');
-      return process.env.NODE_ENV === 'development'
-        ? 'dev-fallback-user-token'
-        : throwError('GSB Token not set');
+      throw new Error('GSB Token not set');
     }
     return _userToken;
   }
@@ -119,7 +115,7 @@ export function getGsbTenantCode(path?: string): string {
   } else {
     if (!_userTenantCode) {
       console.warn('User GSB Tenant Code not set - using default from env');
-      return process.env.NEXT_PUBLIC_DEFAULT_TENANT_CODE || 'apexbase';
+      return process.env.NEXT_PUBLIC_DEFAULT_TENANT_CODE || getDefaultTenant();
     }
     return _userTenantCode;
   }
@@ -168,26 +164,42 @@ function extractTenantCodeFromToken(token: string): string | undefined {
   }
 }
 
-// Helper for error throwing
-function throwError(message: string): never {
-  throw new Error(message);
-}
-
 /**
  * GSB Environment Configuration
  */
 export const GSB_CONFIG = {
-  // API
-  API_URL: process.env.NEXT_PUBLIC_GSB_API_URL || 'https://dev1.gsbapps.net',
-  AUTH_URL: process.env.NEXT_PUBLIC_GSB_AUTH_URL || 'https://common.gsbapps.net',
-
-  // Default tenant
-  DEFAULT_TENANT: process.env.NEXT_PUBLIC_DEFAULT_TENANT_CODE || 'apexbase',
-  COMMON_TENANT: 'common',
+  // Base domain configuration
+  BASE_DOMAIN: process.env.NEXT_PUBLIC_GSB_BASE_DOMAIN || 'gsbapps.net',
+  
+  // Default tenant codes - use environment variables or defaults from tenant-config
+  DEFAULT_TENANT: process.env.NEXT_PUBLIC_DEFAULT_TENANT_CODE || getDefaultTenant(),
+  COMMON_TENANT: process.env.NEXT_PUBLIC_GSB_COMMON_TENANT || getDefaultTenant(),
+  
+  // API URLs constructed using tenant and base domain
+  get API_URL(): string {
+    const tenant = process.env.NEXT_PUBLIC_DEFAULT_TENANT_CODE || getDefaultTenant();
+    const domain = process.env.NEXT_PUBLIC_GSB_BASE_DOMAIN || 'gsbapps.net';
+    return process.env.NEXT_PUBLIC_GSB_API_URL || `https://${tenant}.${domain}`;
+  },
+  
+  get AUTH_URL(): string {
+    const tenant = process.env.NEXT_PUBLIC_GSB_COMMON_TENANT || getDefaultTenant();
+    const domain = process.env.NEXT_PUBLIC_GSB_BASE_DOMAIN || 'gsbapps.net';
+    return process.env.NEXT_PUBLIC_GSB_AUTH_URL || `https://${tenant}.${domain}`;
+  },
 
   // Multi-tenant support
   ENABLE_MULTI_TENANT: process.env.NEXT_PUBLIC_ENABLE_MULTI_TENANT === 'true',
 
   // Function for extracting tenant code from token
-  extractTenantCode: extractTenantCodeFromToken
+  extractTenantCode: extractTenantCodeFromToken,
+  
+  // Helper function to build tenant-specific URL
+  getTenantUrl: (tenantCode: string): string => {
+    if (!tenantCode) {
+      throw new Error('Tenant code is required to construct URL');
+    }
+    const domain = process.env.NEXT_PUBLIC_GSB_BASE_DOMAIN || 'gsbapps.net';
+    return `https://${tenantCode}.${domain}`;
+  }
 };

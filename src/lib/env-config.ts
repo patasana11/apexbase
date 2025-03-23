@@ -9,8 +9,30 @@ interface EnvConfig {
     };
   };
   gsb: {
-    apiUrl: string;
-    tenantCode: string;
+    // Base domain for GSB apps
+    baseDomain: string;
+    // Common tenant code (typically 'common')
+    commonTenant: string;
+    // API endpoints
+    api: {
+      // Base API URL without tenant prefix
+      baseUrl: string;
+      // Full API URL for common tenant
+      commonUrl: string;
+    };
+    // Authentication settings
+    auth: {
+      // Social auth public keys
+      social: {
+        googleClientId: string | null;
+        facebookAppId: string | null;
+        appleClientId: string | null;
+      };
+    };
+    // Multi-tenant settings
+    multiTenant: {
+      enabled: boolean;
+    };
   };
 }
 
@@ -24,9 +46,23 @@ const defaultConfig: EnvConfig = {
     },
   },
   gsb: {
-    apiUrl: 'https://dev1.gsbapps.net',
-    tenantCode: 'apexbase',
-  },
+    baseDomain: 'gsbapps.net',
+    commonTenant: 'common',
+    api: {
+      baseUrl: 'https://{tenant}.gsbapps.net',
+      commonUrl: 'https://common.gsbapps.net',
+    },
+    auth: {
+      social: {
+        googleClientId: null,
+        facebookAppId: null,
+        appleClientId: null,
+      }
+    },
+    multiTenant: {
+      enabled: false,
+    }
+  }
 };
 
 // Load configuration from environment variables
@@ -39,10 +75,37 @@ export const envConfig: EnvConfig = {
     },
   },
   gsb: {
-    apiUrl: process.env.APEXBASE_GSB_API_URL || defaultConfig.gsb.apiUrl,
-    tenantCode: process.env.APEXBASE_GSB_TENANT_CODE || defaultConfig.gsb.tenantCode,
+    baseDomain: process.env.NEXT_PUBLIC_GSB_BASE_DOMAIN || defaultConfig.gsb.baseDomain,
+    commonTenant: process.env.NEXT_PUBLIC_GSB_COMMON_TENANT || defaultConfig.gsb.commonTenant,
+    api: {
+      baseUrl: process.env.NEXT_PUBLIC_GSB_API_BASE_URL || defaultConfig.gsb.api.baseUrl,
+      // Generate URL with the common tenant code
+      get commonUrl() {
+        const baseUrl = envConfig.gsb.api.baseUrl.replace('{tenant}', envConfig.gsb.commonTenant);
+        return process.env.NEXT_PUBLIC_GSB_COMMON_API_URL || baseUrl;
+      }
+    },
+    auth: {
+      social: {
+        googleClientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || null,
+        facebookAppId: process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || null,
+        appleClientId: process.env.NEXT_PUBLIC_APPLE_CLIENT_ID || null,
+      }
+    },
+    multiTenant: {
+      enabled: process.env.NEXT_PUBLIC_ENABLE_MULTI_TENANT === 'true',
+    }
   },
 };
+
+// Helper function to construct a tenant-specific API URL
+export function getTenantApiUrl(tenantCode: string): string {
+  if (!tenantCode) {
+    throw new Error('Tenant code is required for API URL construction');
+  }
+  
+  return envConfig.gsb.api.baseUrl.replace('{tenant}', tenantCode);
+}
 
 // Helper function to check if Azure OpenAI is configured
 export function isAzureOpenAIConfigured(): boolean {

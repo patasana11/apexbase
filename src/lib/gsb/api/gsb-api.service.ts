@@ -1,26 +1,27 @@
 import { HttpCallRequest } from '../types/requests';
-import { getGsbToken, GSB_CONFIG } from '../config/gsb-config';
+import { getGsbToken, getGsbTenantCode, GSB_CONFIG } from '../config/gsb-config';
 
 // Store a singleton instance
 let apiServiceInstance: GsbApiService | null = null;
 
-// Path prefixes for determining which token to use
+// Path prefixes for determining which token to use - should align with gsb-config.ts
 const COMMON_TOKEN_PATHS = [
   '/api/auth',
-  '/api/registration'
+  '/api/registration',
+  '/login',
+  '/register',
+  '/forgot-password',
+  '/registration',
+  '/account'
 ];
 
 export class GsbApiService {
-    private baseUrls: { [key: string]: string } = {
-        common: '',
-        user: ''
-    };
-    private mockResponses: Map<string, any> = new Map();
+    // We'll use a simpler structure with only one base URL that changes based on tenant
+    private baseUrl: string = '';
 
     constructor() {
-        this.baseUrls.common = GSB_CONFIG.AUTH_URL || 'https://common.gsbapps.net';
-        this.baseUrls.user = GSB_CONFIG.API_URL || 'https://dev1.gsbapps.net';
-        this.initMockResponses();
+        // Initialize with default tenant URL
+        this.baseUrl = GSB_CONFIG.API_URL;
     }
 
     /**
@@ -34,104 +35,41 @@ export class GsbApiService {
     }
 
     /**
-     * Initialize mock responses for development mode
-     */
-    private initMockResponses() {
-        // Mock responses for common endpoints
-        this.mockResponses.set('/api/auth/login', {
-            auth: {
-                token: 'dev-common-token-' + Date.now(),
-                tenantToken: 'dev-user-token-' + Date.now(),
-                userId: 'dev-user',
-                name: 'Development User',
-                email: 'admin@apexbase.dev',
-                roles: ['admin', 'developer'],
-                groups: ['all'],
-                expireDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-                title: 'Developer'
-            }
-        });
-
-        // Mock entity listing
-        this.mockResponses.set('/api/entity/list', {
-            items: [
-                { id: 'entity1', name: 'Users', description: 'User accounts' },
-                { id: 'entity2', name: 'Products', description: 'Product catalog' },
-                { id: 'entity3', name: 'Orders', description: 'Customer orders' },
-            ],
-            count: 3,
-            page: 1,
-            pageSize: 10,
-            totalPages: 1
-        });
-
-        // Mock entity query
-        this.mockResponses.set('/api/entity/query', {
-            items: [
-                { id: 'item1', name: 'First Item', status: 'active' },
-                { id: 'item2', name: 'Second Item', status: 'pending' },
-                { id: 'item3', name: 'Third Item', status: 'inactive' },
-            ],
-            count: 3,
-            page: 1,
-            pageSize: 10,
-            totalPages: 1
-        });
-    }
-
-    /**
-     * Set the base URL for a tenant type
+     * Set the base URL for a specific tenant
      * @param tenantCode Tenant code to use
-     * @param isCommonTenant Whether this is the common tenant
+     * @param isCommonTenant Whether this is a common tenant endpoint
      */
     setBaseUrl(tenantCode: string, isCommonTenant: boolean = false) {
-        if (isCommonTenant) {
-            this.baseUrls.common = `https://${tenantCode}.gsbapps.net`;
-            console.log(`Common base URL set to: ${this.baseUrls.common}`);
+        // If this is a common tenant endpoint and we're not explicitly using a common tenant code,
+        // we should ensure we're using the AUTH_URL
+        if (isCommonTenant && tenantCode !== GSB_CONFIG.COMMON_TENANT) {
+            this.baseUrl = GSB_CONFIG.AUTH_URL;
+            console.log(`Set common tenant base URL: ${this.baseUrl}`);
         } else {
-            this.baseUrls.user = `https://${tenantCode}.gsbapps.net`;
-            console.log(`User base URL set to: ${this.baseUrls.user}`);
+            this.baseUrl = GSB_CONFIG.getTenantUrl(tenantCode);
+            console.log(`Set base URL: ${this.baseUrl} for tenant: ${tenantCode}`);
         }
     }
 
     /**
-     * Get the appropriate base URL for the endpoint
-     * @param path API endpoint path
-     * @returns The base URL to use
+     * Check if the path is for a common tenant endpoint
      */
-    private getBaseUrl(path: string): string {
-        // Use common tenant URL for auth endpoints
-        if (this.shouldUseCommonTenant(path)) {
-            return this.baseUrls.common;
-        }
-        // Use user tenant URL for all other endpoints
-        return this.baseUrls.user;
-    }
-
-    /**
-     * Check if we should use the common tenant for a given path
-     * @param path API endpoint path
-     * @returns True if common tenant should be used
-     */
-    private shouldUseCommonTenant(path: string): boolean {
+    private isCommonTenantEndpoint(path: string): boolean {
         return COMMON_TOKEN_PATHS.some(prefix => path.startsWith(prefix));
     }
 
+    /**
+     * Extract tenant code from a JWT token
+     * @param token The JWT token
+     * @returns The tenant code or undefined
+     */
     private extractTenantCode(token: string): string | undefined {
-        // For development tokens, return the default tenant code
-        if (token.startsWith('dev-token') || token.startsWith('dev-common-token') || token.startsWith('dev-user-token')) {
-            return process.env.NEXT_PUBLIC_DEFAULT_TENANT_CODE || 'apexbase';
-        }
-
-        try {
-            const payload = JSON.parse(atob(token.split('.')[1]));
-            return payload.tc || undefined;
-        } catch (error) {
-            console.error('Error extracting tenant code from token:', error);
-            return undefined;
-        }
+        return GSB_CONFIG.extractTenantCode(token);
     }
 
+    /**
+     * Make an HTTP call
+     */
     async httpCall(dto: any, callback?: (response: any) => void, errorCallback?: (error: any) => void) {
         try {
             console.log('Making HTTP call with path:', dto.path);
@@ -149,38 +87,12 @@ export class GsbApiService {
         }
     }
 
+    /**
+     * Execute HTTP call asynchronously
+     */
     async httpCallAsync(dto: any) {
         console.log('HTTP call async to path:', dto.path);
 
-        // Check for development mode and mock responses
-        if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_SKIP_GSB_AUTH === 'true') {
-            // Find exact match first
-            if (this.mockResponses.has(dto.path)) {
-                console.log('Development mode: Using mock response for', dto.path);
-                return this.mockResponses.get(dto.path);
-            }
-
-            // Check for partial matches
-            for (const [key, value] of this.mockResponses.entries()) {
-                if (dto.path.includes(key)) {
-                    console.log('Development mode: Using partial mock response for', dto.path);
-                    return value;
-                }
-            }
-
-            // For unauthorized paths, return a default mock response
-            console.log('Development mode: No mock response found for', dto.path);
-            return {
-                success: true,
-                message: 'Development mode mock response',
-                data: {
-                    items: [],
-                    count: 0
-                }
-            };
-        }
-
-        // Real API call for production or when not in development mode
         const requestData = this.convertToRequestData(dto);
         console.log('Request URL:', requestData.url);
         console.log('Request method:', requestData.init.method);
@@ -204,16 +116,18 @@ export class GsbApiService {
         }
     }
 
+    /**
+     * Convert request parameters to fetch request data
+     */
     convertToRequestData(requestParameters: any) {
-        // Get the appropriate base URL based on the endpoint path
-        const baseUrl = this.getBaseUrl(requestParameters.path || '');
-        const url = new URL(requestParameters.path || '', baseUrl).toString();
+        const url = new URL(requestParameters.path || '', this.baseUrl).toString();
 
         const init: RequestInit = {
             method: requestParameters.method,
             headers: {
                 'Content-Type': requestParameters.contentType || 'application/json',
-                ...(requestParameters.bearerToken ? { 'Authorization': `Bearer ${requestParameters.bearerToken}` } : {}),
+                // Only add Authorization header if noAuth is not true and we have a bearerToken
+                ...(!requestParameters.noAuth && requestParameters.bearerToken ? { 'Authorization': `Bearer ${requestParameters.bearerToken}` } : {}),
                 ...requestParameters.headers
             }
         };
@@ -223,45 +137,50 @@ export class GsbApiService {
         return { url, init };
     }
 
+    /**
+     * Call the API with the appropriate token and tenant code
+     */
     async callApi(req: HttpCallRequest, endPoint: string, token?: string, tenantCode?: string) {
         console.log(`Calling API endpoint: ${endPoint}`);
 
-        // If no token is provided, get the appropriate token based on the endpoint
-        if (!token) {
-            token = getGsbToken(endPoint);
-            console.log(`Using token based on endpoint path: ${endPoint}`);
+        // Check if this is a common tenant endpoint
+        const isCommonTenant = this.isCommonTenantEndpoint(endPoint);
+        console.log(`Endpoint ${endPoint} is ${isCommonTenant ? 'a common' : 'a user'} tenant endpoint`);
+
+        // Skip token logic if noAuth is true
+        let bearerToken: string | undefined = undefined;
+        if (!req.noAuth) {
+            // If no token is provided, get the appropriate token based on the endpoint
+            if (!token) {
+                token = getGsbToken(endPoint); 
+                console.log(`Using token based on endpoint path: ${endPoint}`);
+            }
+            
+            bearerToken = token;
+        } else {
+            console.log('noAuth flag is set, skipping authentication token');
         }
 
-        if (token && !tenantCode) {
+        // If no tenant code is provided and we have a token, extract it from the token
+        if (!tenantCode && token) {
             tenantCode = this.extractTenantCode(token);
             console.log(`Extracted tenant code from token: ${tenantCode}`);
         }
 
-        // Determine if this is a common tenant endpoint
-        const isCommonTenantEndpoint = this.shouldUseCommonTenant(endPoint);
-
-        if (tenantCode) {
-            this.setBaseUrl(tenantCode, isCommonTenantEndpoint);
-        } else if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_SKIP_GSB_AUTH === 'true') {
-            // In development mode, use the default tenant code
-            tenantCode = process.env.NEXT_PUBLIC_DEFAULT_TENANT_CODE || 'apexbase';
-            const commonTenant = 'common';
-
-            if (isCommonTenantEndpoint) {
-                this.setBaseUrl(commonTenant, true);
-            } else {
-                this.setBaseUrl(tenantCode, false);
-            }
-
-            console.log(`Development mode: Using ${isCommonTenantEndpoint ? 'common' : 'user'} tenant: ${isCommonTenantEndpoint ? commonTenant : tenantCode}`);
-        } else {
-            console.warn('No tenant code provided for API call');
+        // If still no tenant code, get it from config
+        if (!tenantCode) {
+            tenantCode = getGsbTenantCode(endPoint);
+            console.log(`Using tenant code from config: ${tenantCode}`);
         }
 
+        // Set the base URL for this request, considering if it's a common tenant endpoint
+        this.setBaseUrl(tenantCode, isCommonTenant);
+
+        // Prepare the request
         const request: HttpCallRequest = {
             ...req,
             path: endPoint,
-            bearerToken: token,
+            bearerToken: bearerToken,
             contentType: req.contentType || 'application/json',
             jsonResponse: req.jsonResponse !== undefined ? req.jsonResponse : true
         };

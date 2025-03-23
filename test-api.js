@@ -1,7 +1,10 @@
 // Simple script to test GSB API access
 const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiJiZjE1MjRiNy04MjBmLTQ2NGYtOWYzNC02ZWQ2Y2Q5NjVlNjEiLCJ0YyI6ImRldjEiLCJpIjoiOThCNUU0OUQiLCJleHAiOjE3NDMwMDcwMzQsImlzcyI6IkBnc2IifQ.0WImy6Y1XmC0RwJPG-Y3teTlAA4wL17rgDYARyySciQ";
 const tenantCode = "dev1";
-const baseUrl = `https://${tenantCode}.gsbapps.net`;
+
+// Get base domain from environment or use default
+const baseDomain = process.env.NEXT_PUBLIC_GSB_BASE_DOMAIN || 'gsbapps.net';
+const baseUrl = `https://${tenantCode}.${baseDomain}`;
 
 // Parse JWT token to see its contents
 function parseJwt(token) {

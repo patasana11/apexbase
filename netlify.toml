@@ -7,8 +7,9 @@
   NEXT_PUBLIC_AZURE_OPENAI_ENDPOINT = ""
   NEXT_PUBLIC_AZURE_OPENAI_DEPLOYMENT_ID = "gpt-4"
 
-  APEXBASE_GSB_API_URL = "https://dev1.gsbapps.net"
-  APEXBASE_GSB_TENANT_CODE = "apexbase"
+  NEXT_PUBLIC_GSB_BASE_DOMAIN = "gsbapps.net"
+  NEXT_PUBLIC_DEFAULT_TENANT_CODE = "apexbase"
+  NEXT_PUBLIC_GSB_COMMON_TENANT = "common"
 
 [images]
   remote_images = ["*"]

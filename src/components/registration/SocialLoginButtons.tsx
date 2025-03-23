@@ -20,7 +20,7 @@ interface SocialLoginButtonsProps {
 export default function SocialLoginButtons({
   onLogin,
   isSignUp = false,
-  tenantCode = process.env.NEXT_PUBLIC_DEFAULT_TENANT_CODE || 'dev1',
+  tenantCode = process.env.NEXT_PUBLIC_DEFAULT_TENANT_CODE || 'common',
   remember = false
 }: SocialLoginButtonsProps) {
   const [isLoading, setIsLoading] = useState<SocialProvider | null>(null);

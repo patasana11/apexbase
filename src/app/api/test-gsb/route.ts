@@ -66,7 +66,7 @@ async function testApiConnection(token: string) {
 
   try {
     const tenantCode = extractTenantFromToken(token);
-    const baseUrl = `https://${tenantCode || 'apexbase'}.gsbapps.net`;
+    const baseUrl = GSB_CONFIG.getTenantUrl(tenantCode || GSB_CONFIG.DEFAULT_TENANT);
     const url = `${baseUrl}/api/health`;
 
     const response = await fetch(url, {
