@@ -47,11 +47,15 @@ export interface AuthResponse {
   error?: string;
 }
 
+/**
+ * Authentication service for managing auth tokens
+ */
 export class AuthService {
   private gsbService: GsbEntityService;
   private commonToken: string | null = null;
   private userToken: string | null = null;
   private tenantCode: string | null = null;
+  private tokenKey: string = 'gsb_auth_token';
 
   private constructor() {
     this.gsbService = GsbEntityService.getInstance();
@@ -229,7 +233,39 @@ export class AuthService {
    * @returns Authentication response
    */
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
-    // Handle development mode with skip auth
+    // For development mode with skip auth
+    if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_SKIP_GSB_AUTH === 'true') {
+      const devToken = 'dev-token-' + Date.now();
+      const userTenantToken = 'dev-user-token-' + Date.now();
+      this.commonToken = devToken;
+      this.userToken = userTenantToken;
+      this.tenantCode = credentials.tenantCode || 'apexbase';
+      
+      // Set in global config
+      setCommonGsbToken(devToken);
+      setUserGsbToken(userTenantToken);
+      setGsbTenantCode(this.tenantCode);
+      
+      const fakeUserData = {
+        userId: 'dev-user',
+        name: 'Development User',
+        email: credentials.email || 'admin@apexbase.dev',
+        roles: ['admin', 'developer'],
+        groups: ['all'],
+        expireDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        title: 'Developer'
+      };
+      
+      this.saveToStorage(devToken, userTenantToken, this.tenantCode || 'apexbase', fakeUserData, credentials.remember || true);
+      
+      return {
+        success: true,
+        token: devToken,
+        userTenantToken: userTenantToken,
+        tenantCode: this.tenantCode || 'apexbase',
+        userData: fakeUserData
+      };
+    }
 
     // Normal authentication process
     try {
@@ -237,6 +273,7 @@ export class AuthService {
 
       const request: any = {
         email,
+        password,
         remember,
         includeUserInfo: true,
         variation: {
@@ -244,22 +281,16 @@ export class AuthService {
         }
       };
 
-      // Add appropriate authentication method
+      // Add appropriate authentication method 
       if (googleToken) {
         request.googleToken = googleToken;
       } else if (facebookToken) {
         request.facebookToken = facebookToken;
       } else if (appleToken) {
         request.appleToken = appleToken;
-      } else if (password) {
-        request.password = password;
-      } else {
-        return {
-          success: false,
-          error: 'Authentication failed: No authentication method provided'
-        };
       }
 
+      // Call getToken on GsbEntityService
       const response = await this.gsbService.getToken(request);
 
       if (response?.auth?.token) {
@@ -298,7 +329,7 @@ export class AuthService {
         return {
           success: true,
           token: commonToken,
-          userTenantToken: userToken,
+          userTenantToken: userToken || undefined,
           tenantCode,
           userData
         };

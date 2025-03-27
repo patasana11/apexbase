@@ -99,3 +99,89 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
+
+## Environment Setup
+
+The application requires the following environment variables to be set:
+
+```
+# API Configuration
+NEXT_PUBLIC_API_URL=http://your-api-endpoint.com/api
+
+# Default tenant code (for development)
+NEXT_PUBLIC_DEFAULT_TENANT_CODE=apexbase
+
+# Skip authentication (for development)
+NEXT_PUBLIC_SKIP_GSB_AUTH=true
+```
+
+You can create a `.env.local` file in the root directory with these variables for local development.
+
+## Entity Autocomplete Component
+
+The `EntityAutocomplete` component provides a flexible and powerful way to select entities from the GSB system. It supports both direct entity passing and dynamic fetching based on entity type.
+
+### Basic Usage with Entity Type
+
+The simplest way to use the component is to specify an entity type and let it handle the fetching:
+
+```tsx
+<EntityAutocomplete
+  entityType="GsbUser"
+  value={selectedUserId}
+  onValueChange={(id, item) => setSelectedUserId(id)}
+  placeholder="Select a user"
+/>
+```
+
+### Using with Pre-fetched Entities
+
+If you need more control over the entity fetching process, you can fetch entities manually and pass them to the component:
+
+```tsx
+// Fetch entities yourself
+const [users, setUsers] = useState<EntityItem[]>([]);
+const [isLoading, setIsLoading] = useState(false);
+
+const fetchUsers = async (searchTerm?: string) => {
+  setIsLoading(true);
+  try {
+    const entityService = EntityUiService.getInstance();
+    const items = await entityService.getEntities('GsbUser', searchTerm);
+    setUsers(items);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+// Use the component with pre-fetched entities
+<EntityAutocomplete
+  entities={users}
+  isLoading={isLoading}
+  value={selectedUserId}
+  onValueChange={(id, item) => setSelectedUserId(id)}
+  placeholder="Select a user"
+  onSearch={fetchUsers}
+/>
+```
+
+## API Communication
+
+The application uses the `GsbEntityService` (from `/lib/gsb/services/entity/gsb-entity.service.ts`) for making API requests to the backend. The service uses the `NEXT_PUBLIC_API_URL` environment variable to determine the API endpoint, which should be configured in your environment variables.
+
+The `GsbEntityService` is a singleton service that provides methods for querying, saving, and managing entities in the GSB system. It's used by:
+
+- `EntityUiService`: For fetching entity data for UI components
+- `AuthService`: For authentication operations
+- Other services that need to interact with the GSB backend
+
+By default, API requests are made to `/api` if no environment variable is provided.
+
+## Development Guidelines
+
+1. Use the `EntityAutocomplete` component with `entityType` instead of manually fetching entities when possible
+2. Keep result limits to 10 items for better performance
+3. Use simple filters with the `filter` parameter rather than complex `where` conditions
+4. Always use environment variables for configuration rather than hardcoded values

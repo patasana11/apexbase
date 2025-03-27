@@ -1,11 +1,26 @@
+export enum AggregateFunction {
+    None = 0,
+    Sum = 1,
+    Average = 2,
+    Count = 3,
+    Maximum = 4,
+    Minimum = 5,
+    Variance = 6
+  }
+  
+
 export class SelectCol {
-    aggregateFunction?: string | undefined;
+    aggregateFunction?: AggregateFunction;
     dateModifier?: string | undefined;
     name?: string | undefined;
     script?: string | undefined;
     groupBy?: boolean | undefined;
     fullName?: string | undefined;
     title?: string | undefined;
+    value?: any | undefined;
+    nameScript?: string | undefined;
+    valScript?: string | undefined;
+    selectAsTitle?: string | undefined;
 
     constructor(cName: string | undefined = undefined) {
         this.name = cName;
@@ -64,7 +79,8 @@ export class PropertyValue {
 }
 
 export class SingleQuery {
-    propVal: PropertyValue;
+    col?: SelectCol;
+    val?: SelectCol;
     relationLevel?: number | undefined;
     children?: SingleQuery[] | undefined;
     relation?: QueryRelation;
@@ -73,55 +89,77 @@ export class SingleQuery {
     private function?: QueryFunction | undefined;
 
     constructor(propName: string | undefined = undefined, propVal: any = undefined, func: QueryFunction | undefined = undefined) {
-        this.propVal = new PropertyValue(propName, propVal);
+        this.col = new SelectCol(propName);
+        this.val = new SelectCol();
+        this.val.value = propVal;
         this.function = func;
     }
 
+    aggregate(func: AggregateFunction) {
+        if (!this.col) this.col = new SelectCol();
+        this.col.aggregateFunction = func;
+        return this;
+    }
+
+    groupBy(value: boolean = true) {
+        if (!this.col) this.col = new SelectCol();
+        this.col.groupBy = value;
+        return this;
+    }
+
     isEqual(value: any) {
+        if (!this.val) this.val = new SelectCol();
         this.function = QueryFunction.Equals;
-        this.propVal.value = value;
+        this.val.value = value;
         return this;
     }
 
     isLike(value: any) {
+        if (!this.val) this.val = new SelectCol();
         this.function = QueryFunction.Like;
-        this.propVal.value = value;
+        this.val.value = value;
         return this;
     }
 
     isGreater(value: any) {
+        if (!this.val) this.val = new SelectCol();
         this.function = QueryFunction.Greater;
-        this.propVal.value = value;
+        this.val.value = value;
         return this;
     }
 
     isSmaller(value: any) {
+        if (!this.val) this.val = new SelectCol();
         this.function = QueryFunction.Smaller;
-        this.propVal.value = value;
+        this.val.value = value;
         return this;
     }
 
     contains(value: any) {
+        if (!this.val) this.val = new SelectCol();
         this.function = QueryFunction.Contains;
-        this.propVal.value = value;
+        this.val.value = value;
         return this;
     }
 
     in(value: any) {
+        if (!this.val) this.val = new SelectCol();
         this.function = QueryFunction.In;
-        this.propVal.value = value;
+        this.val.value = value;
         return this;
     }
 
     fullTextSeach(value: any) {
+        if (!this.val) this.val = new SelectCol();
         this.function = QueryFunction.FullTextSearch;
-        this.propVal.value = value;
+        this.val.value = value;
         return this;
     }
 
     is(value: any) {
+        if (!this.val) this.val = new SelectCol();
         this.function = QueryFunction.Is;
-        this.propVal.value = value;
+        this.val.value = value;
         return this;
     }
 
@@ -131,8 +169,10 @@ export class SingleQuery {
     }
 
     funcVal(queryFunction: QueryFunction, value: any) {
+        if (!this.val) this.val = new SelectCol();
         this.function = queryFunction;
-        this.propVal.value = value;
+        this.val.value = value;
         return this;
     }
+    
 } 

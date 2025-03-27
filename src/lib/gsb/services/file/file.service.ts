@@ -153,7 +153,6 @@ export class FileService {
     try {
       // Set defaults
       const newFolder: GsbFile = {
-        id: '',
         name,
         fileType: FileType.FileSystem,
         listingType: ListingType.Folder,

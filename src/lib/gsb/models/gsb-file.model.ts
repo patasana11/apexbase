@@ -37,8 +37,8 @@ export interface SplitFilesResult {
  * Represents a GSB File entity
  */
 export interface GsbFile {
-  id: string;
-  name: string;
+  id?: string;
+  name?: string;
   path?: string;
   properties?: string;
   fileType?: FileType;

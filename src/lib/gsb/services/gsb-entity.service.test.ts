@@ -1,9 +1,9 @@
-import { GsbEntityService } from '../entity/gsb-entity.service';
+import { GsbEntityService } from '../services/entity/gsb-entity.service';
 import { GsbSaveRequest } from '../types/requests';
 import { GsbQueryResponse, GsbSaveResponse, GsbQueryOpResponse } from '../types/responses';
 import { describe, beforeEach, it, expect } from 'vitest';
 import { QueryParams } from '../types/query-params';
-import { QueryFunction, SingleQuery } from '../types/query';
+import { QueryFunction, SingleQuery, AggregateFunction } from '../types/query';
 
 interface TestEntity {
     id?: string;

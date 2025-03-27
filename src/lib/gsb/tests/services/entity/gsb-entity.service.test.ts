@@ -3,7 +3,7 @@ import { GsbSaveRequest } from '../../../types/requests';
 import { GsbQueryResponse, GsbSaveResponse, GsbQueryOpResponse } from '../../../types/responses';
 import { describe, beforeEach, it, expect, beforeAll, afterAll } from 'vitest';
 import { QueryParams } from '../../../types/query-params';
-import { QueryFunction, SingleQuery } from '../../../types/query';
+import { QueryFunction, SingleQuery, AggregateFunction } from '../../../types/query';
 import { getTestToken, TEST_CONFIG, cleanupTestEntities } from '../../test-helper';
 import { ServiceHelper } from '../../../utils/service-helper';
 import { logger } from '../../../utils/logger';
@@ -137,18 +137,12 @@ describe('GsbEntityService', () => {
         });
 
         it('should query and verify the updated title', async () => {
-            // Use ServiceHelper to prepare the query
+            // Use updated SingleQuery structure with col and val
             const query = ServiceHelper.prepareQuery(
                 'test',
                 1,
                 10,
-                [{
-                    propVal: {
-                        name: 'id',
-                        value: createdEntityId
-                    },
-                    function: QueryFunction.Equals
-                }]
+                [new SingleQuery('id', createdEntityId).isEqual(createdEntityId)]
             );
 
             const response = await entityService.query(
@@ -230,18 +224,12 @@ describe('GsbEntityService', () => {
         });
 
         it('should handle complex queries', async () => {
-            // Use ServiceHelper to prepare a complex query
+            // Use updated SingleQuery structure with col and val
             const query = ServiceHelper.prepareQuery(
                 'test',
                 1,
                 10,
-                [{
-                    propVal: {
-                        name: 'title',
-                        value: TEST_ENTITY_PREFIX
-                    },
-                    function: QueryFunction.Like
-                }],
+                [new SingleQuery('title').isLike(TEST_ENTITY_PREFIX)],
                 [{
                     col: { name: 'title' },
                     sortType: 'ASC'
@@ -256,6 +244,25 @@ describe('GsbEntityService', () => {
 
             expect(response).toBeDefined();
             expect(Array.isArray(response.entities)).toBe(true);
+        });
+
+        it('should handle aggregate functions', async () => {
+            // Test using aggregate function
+            const query = ServiceHelper.prepareQuery(
+                'test',
+                1,
+                10,
+                [new SingleQuery('someNumericField')
+                    .aggregate(AggregateFunction.Sum)
+                    .groupBy()
+                    .isGreater(0)]
+            );
+
+            // Just testing query structure, not actual results
+            expect(query.query?.[0].col?.name).toBe('someNumericField');
+            expect(query.query?.[0].col?.aggregateFunction).toBe(AggregateFunction.Sum);
+            expect(query.query?.[0].col?.groupBy).toBe(true);
+            expect(query.query?.[0].val?.value).toBe(0);
         });
     });
 });

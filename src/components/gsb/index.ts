@@ -1,0 +1,1 @@
+export { EntityAutocomplete, type EntityItem } from './entity-autocomplete'; 
