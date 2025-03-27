@@ -58,6 +58,8 @@ import { useToast } from "@/components/ui/use-toast";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DataTable, Column } from '@/components/gsb';
+import { formatDate } from '@/lib/utils';
 import { FunctionUiService } from "@/lib/services/ui/function-ui.service";
 import { GsbWfFunction } from "@/lib/gsb/models/gsb-function.model";
 import { FunctionEditor } from '@/components/function/function-editor';
@@ -178,11 +180,12 @@ export default function FunctionsPage() {
     setIsSaving(true);
     try {
       if (isEditing && currentFunction) {
-        // Update existing function with all properties
+        // Update existing function
         const updated = {
           ...currentFunction,
           name: functionName,
           title: functionName,
+          code: functionCode,
         };
         
         const success = await functionUiService.updateFunction(updated);
@@ -197,16 +200,9 @@ export default function FunctionsPage() {
           throw new Error("Failed to update function");
         }
       } else {
-        // Create new function with all properties
-        let newFunc = currentFunction;
-        
-        if (!newFunc) {
-          newFunc = functionUiService.createEmptyFunction(functionName);
-        }
-        
-        // Update the name in case it was changed
-        newFunc.name = functionName;
-        newFunc.title = functionName;
+        // Create new function
+        const newFunc = functionUiService.createEmptyFunction(functionName);
+        newFunc.code = functionCode;
         
         const id = await functionUiService.createFunction(newFunc);
         if (id) {
@@ -333,39 +329,132 @@ export default function FunctionsPage() {
     }
   };
 
-  // Handle search
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    setCurrentPage(1);
-    loadFunctions();
+  // Replace the handleSearch function with a more direct one
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    setCurrentPage(1); // Reset to first page when search changes
   };
-
-  // Clear search
-  const handleClearSearch = () => {
-    setSearchQuery("");
-    setCurrentPage(1);
-    loadFunctions();
+  
+  // Add handler for page size changes
+  const handlePageSizeChange = (size: number) => {
+    setPageSize(size);
+    setCurrentPage(1); // Reset to first page when page size changes
   };
-
-  // Loading skeleton component
-  const renderSkeletonRows = () => {
-    return Array(5).fill(0).map((_, index) => (
-      <TableRow key={`skeleton-${index}`}>
-        <TableCell>
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-[150px]" />
-            <Skeleton className="h-3 w-[100px]" />
-          </div>
-        </TableCell>
-        <TableCell><Skeleton className="h-5 w-[70px]" /></TableCell>
-        <TableCell><Skeleton className="h-5 w-[70px]" /></TableCell>
-        <TableCell className="hidden md:table-cell"><Skeleton className="h-4 w-[60px]" /></TableCell>
-        <TableCell className="hidden md:table-cell"><Skeleton className="h-4 w-[60px]" /></TableCell>
-        <TableCell className="hidden md:table-cell"><Skeleton className="h-4 w-[60px]" /></TableCell>
-        <TableCell align="right"><Skeleton className="h-8 w-8 rounded-full ml-auto" /></TableCell>
-      </TableRow>
-    ));
+  
+  // Add new function for exporting functions
+  const handleExport = async () => {
+    try {
+      toast({
+        title: "Info",
+        description: "Export functionality will be implemented soon.",
+      });
+    } catch (error) {
+      console.error("Error exporting functions:", error);
+      toast({
+        title: "Error",
+        description: "Failed to export functions. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
+  
+  // Add new function for opening filter options
+  const handleFilter = () => {
+    // Implement filter dialog or options
+    toast({
+      title: "Info",
+      description: "Filter functionality will be implemented soon.",
+    });
+  };
+  
+  // Define columns for the functions data table
+  const columns: Column<GsbWfFunction>[] = [
+    {
+      key: "name",
+      header: "Function Name",
+      cell: (func) => (
+        <div className="font-medium">
+          {func.name}
+        </div>
+      ),
+    },
+    {
+      key: "runtime",
+      header: "Runtime",
+      cell: (func) => getRuntimeBadge(func.module?.name || "node"),
+      className: "hidden md:table-cell",
+    },
+    {
+      key: "status",
+      header: "Status",
+      cell: (func) => (
+        <Badge 
+          variant={func.standalone !== false ? "default" : "secondary"}
+        >
+          {func.standalone !== false ? "Active" : "Inactive"}
+        </Badge>
+      ),
+    },
+    {
+      key: "lastUpdate",
+      header: "Last Updated",
+      cell: (func) => formatDate(func.lastUpdateDate),
+      className: "hidden md:table-cell",
+    },
+    {
+      key: "actions",
+      header: "",
+      cell: (func) => (
+        <div className="text-right">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+              >
+                <FiMoreHorizontal className="h-4 w-4" />
+                <span className="sr-only">Actions</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                className="cursor-pointer"
+                onClick={() => handleOpenExecuteDialog(func.id || "")}
+              >
+                <FiPlay className="mr-2 h-4 w-4" />
+                Execute
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="cursor-pointer"
+                onClick={() => handleEditFunction(func.id || "")}
+              >
+                <FiEdit2 className="mr-2 h-4 w-4" />
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="cursor-pointer"
+                onClick={() => {
+                  toast({ title: "Cloning function", description: "This functionality will be implemented soon." });
+                }}
+              >
+                <FiCopy className="mr-2 h-4 w-4" />
+                Duplicate
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="cursor-pointer text-red-600"
+                onClick={() => handleConfirmDelete(func.id || "")}
+              >
+                <FiTrash2 className="mr-2 h-4 w-4" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ),
+    },
+  ];
 
   // Get runtime badge colors
   const getRuntimeBadge = (runtime: string) => {
@@ -375,326 +464,67 @@ export default function FunctionsPage() {
       case "python":
         return <Badge variant="outline" className="bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Python</Badge>;
       default:
-        return <Badge variant="outline">{runtime}</Badge>;
+        return <Badge variant="outline">{runtime || "Unknown"}</Badge>;
     }
   };
 
   return (
     <div className="flex flex-col gap-6 p-4 md:gap-8 md:p-8">
       <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold tracking-tight">Serverless Functions</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Functions</h1>
         <p className="text-muted-foreground">
-          Deploy and manage your serverless cloud functions.
+          Create, manage, and execute serverless functions.
         </p>
       </div>
 
-      <Tabs defaultValue="functions" className="space-y-4" value={selectedTab} onValueChange={setSelectedTab}>
-        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+      <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-4">
+        <div className="flex items-center justify-between">
           <TabsList>
             <TabsTrigger value="functions">Functions</TabsTrigger>
-            <TabsTrigger value="logs">Logs</TabsTrigger>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
+            <TabsTrigger value="logs">Execution Logs</TabsTrigger>
           </TabsList>
-          <div className="flex items-center gap-2">
-            <form className="relative flex-1" onSubmit={handleSearch}>
-              <FiSearch className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                type="search"
-                placeholder="Search functions..."
-                className="pl-8 sm:w-[250px]"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              {searchQuery && (
-                <Button
-                  variant="ghost"
-                  className="absolute right-0 top-0 h-9 w-9 p-0"
-                  onClick={handleClearSearch}
-                >
-                  <FiX className="h-4 w-4" />
-                  <span className="sr-only">Clear search</span>
-                </Button>
-              )}
-            </form>
-            <Button onClick={handleNewFunction}>
-              <FiPlus className="mr-2 h-4 w-4" />
-              New Function
-            </Button>
-          </div>
+          <Button onClick={handleNewFunction}>
+            <FiPlus className="mr-2 h-4 w-4" />
+            New Function
+          </Button>
         </div>
 
         <TabsContent value="functions" className="space-y-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle>Function Management</CardTitle>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={loadFunctions}>
-                    <FiRefreshCw className="mr-2 h-4 w-4" />
-                    Refresh
-                  </Button>
-                </div>
-              </div>
-              <CardDescription>
-                Deploy, configure, and monitor your serverless functions.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead className="hidden md:table-cell">Created By</TableHead>
-                    <TableHead className="hidden md:table-cell">Created Date</TableHead>
-                    <TableHead className="hidden md:table-cell">Last Updated</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isLoading ? (
-                    renderSkeletonRows()
-                  ) : functions.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8">
-                        <div className="flex flex-col items-center justify-center gap-2">
-                          <FiCode className="h-8 w-8 text-muted-foreground" />
-                          <p className="text-muted-foreground">
-                            {searchQuery ? "No matching functions found" : "No functions available"}
-                          </p>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={handleNewFunction} 
-                            className="mt-2"
-                          >
-                            <FiPlus className="mr-2 h-4 w-4" />
-                            Create Your First Function
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    functions.map((func) => (
-                      <TableRow key={func.id}>
-                        <TableCell>
-                          <div className="font-medium">{func.name}</div>
-                          <div className="text-xs text-muted-foreground">
-                            ID: {func.id}
-                            {func.operationsObj && func.operationsObj.length > 0 && (
-                              <span className="ml-2">
-                                ({func.operationsObj.length} operations)
-                              </span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="default"
-                            className="bg-green-500"
-                          >
-                            active
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-                            {func.standalone ? "Standalone" : "Module"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell">
-                          {func.createdBy?.name || "System"}
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell">
-                          {func.createDate ? new Date(func.createDate).toLocaleString() : "N/A"}
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell">
-                          {func.lastUpdateDate ? new Date(func.lastUpdateDate).toLocaleString() : "N/A"}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                              >
-                                <FiMoreHorizontal className="h-4 w-4" />
-                                <span className="sr-only">Actions</span>
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => handleOpenExecuteDialog(func.id)}>
-                                <FiPlay className="mr-2 h-4 w-4" />
-                                Run Now
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleEditFunction(func.id)}>
-                                <FiEdit2 className="mr-2 h-4 w-4" />
-                                Edit Code
-                              </DropdownMenuItem>
-                              <DropdownMenuItem>
-                                <FiServer className="mr-2 h-4 w-4" />
-                                Configure
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem onClick={() => handleConfirmDelete(func.id)}>
-                                <FiTrash2 className="mr-2 h-4 w-4" />
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-            {!isLoading && functions.length > 0 && (
-              <CardFooter className="flex items-center justify-between p-4">
-                <div className="text-sm text-muted-foreground">
-                  Showing {functions.length} of {totalCount} functions
-                </div>
-              </CardFooter>
-            )}
-          </Card>
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Function Metrics</CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-4">
-                <div>
-                  <div className="text-sm font-medium text-muted-foreground">
-                    Total Functions
-                  </div>
-                  <div className="text-2xl font-bold">
-                    {totalCount}
-                  </div>
-                </div>
-                <Separator />
-                <div>
-                  <div className="text-sm font-medium text-muted-foreground">
-                    Total Executions (Last 24h)
-                  </div>
-                  <div className="text-2xl font-bold">
-                    4,218
-                  </div>
-                </div>
-                <Separator />
-                <div>
-                  <div className="text-sm font-medium text-muted-foreground">
-                    Avg. Execution Time
-                  </div>
-                  <div className="text-2xl font-bold">
-                    245 ms
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Runtime Distribution</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="h-3 w-3 rounded-full bg-green-500"></div>
-                      <span>Node.js</span>
-                    </div>
-                    <span className="text-sm font-medium">
-                      {functions.filter(f => f.module?.name === "node.js").length || 0} functions
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="h-3 w-3 rounded-full bg-blue-500"></div>
-                      <span>Python</span>
-                    </div>
-                    <span className="text-sm font-medium">
-                      {functions.filter(f => f.module?.name === "python").length || 0} functions
-                    </span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="lg:col-span-2">
-              <CardHeader>
-                <CardTitle className="text-lg">Quick Actions</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <Button variant="outline" className="justify-start" onClick={handleNewFunction}>
-                    <FiPlus className="mr-2 h-4 w-4" />
-                    Create Function
-                  </Button>
-                  <Button variant="outline" className="justify-start">
-                    <FiDownload className="mr-2 h-4 w-4" />
-                    Download Templates
-                  </Button>
-                  <Button variant="outline" className="justify-start">
-                    <FiClock className="mr-2 h-4 w-4" />
-                    Schedule Function
-                  </Button>
-                  <Button variant="outline" className="justify-start">
-                    <FiCpu className="mr-2 h-4 w-4" />
-                    Resource Settings
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          <DataTable
+            data={functions}
+            columns={columns}
+            totalItems={totalCount}
+            currentPage={currentPage}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={handlePageSizeChange}
+            onSearch={handleSearch}
+            searchQuery={searchQuery}
+            onExport={handleExport}
+            onFilter={handleFilter}
+            isLoading={isLoading}
+            searchPlaceholder="Search functions..."
+          />
         </TabsContent>
-
+        
         <TabsContent value="logs" className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle>Function Execution Logs</CardTitle>
               <CardDescription>
-                View execution logs and debugging information.
+                View logs from your function executions
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="rounded-md border p-4 text-center text-muted-foreground">
-                <FiClock className="mx-auto h-8 w-8 mb-2" />
-                <p>Function logs will appear here when available.</p>
+              <div className="text-muted-foreground text-center py-8">
+                Function logs will be implemented soon.
               </div>
             </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="settings" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Function Settings</CardTitle>
-              <CardDescription>
-                Configure global settings for serverless functions.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="default-timeout">Default Timeout (seconds)</Label>
-                  <Input id="default-timeout" type="number" defaultValue="30" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="default-memory">Default Memory (MB)</Label>
-                  <Input id="default-memory" type="number" defaultValue="128" />
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button className="ml-auto">Save Settings</Button>
-            </CardFooter>
           </Card>
         </TabsContent>
       </Tabs>
-
-      {/* Function Edit/Create Dialog */}
+      
+      {/* Function Dialog - Keep unchanged */}
       <Dialog open={showFunctionDialog} onOpenChange={setShowFunctionDialog}>
         <DialogContent className="max-w-4xl h-[80vh]">
           <DialogHeader>
@@ -749,8 +579,8 @@ export default function FunctionsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Test Function Dialog */}
+      
+      {/* Test Dialog - Keep unchanged */}
       <Dialog open={showTestDialog} onOpenChange={setShowTestDialog}>
         <DialogContent className="max-w-4xl h-[80vh]">
           <DialogHeader>
@@ -816,8 +646,8 @@ export default function FunctionsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Delete Confirmation Dialog */}
+      
+      {/* Delete Dialog - Keep unchanged */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <DialogContent>
           <DialogHeader>

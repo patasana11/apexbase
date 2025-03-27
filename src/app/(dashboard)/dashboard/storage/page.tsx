@@ -47,6 +47,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
+import { Pagination } from '@/components/gsb';
 
 import { GsbFile, ListingType } from "@/lib/gsb/models/gsb-file.model";
 import { FileUiService } from "@/lib/services/ui/file-ui.service";
@@ -77,7 +78,7 @@ export default function StoragePage() {
   const [currentFolder, setCurrentFolder] = useState<GsbFile | null>(null);
   const [folderPath, setFolderPath] = useState<GsbFile[]>([]);
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(24);
+  const [pageSize, setPageSize] = useState(24);
   
   // Upload states
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
@@ -192,6 +193,12 @@ export default function StoragePage() {
     }
   }, [currentFolderId, page, pageSize, toast]);
   
+  // Handle page size change
+  const handlePageSizeChange = useCallback((newPageSize: number) => {
+    setPage(1); // Reset to first page when changing page size
+    setPageSize(newPageSize);
+  }, []);
+  
   // Navigate to a folder
   const navigateToFolder = (folderId: string | undefined) => {
     if (!folderId) return;
@@ -280,19 +287,20 @@ export default function StoragePage() {
   // Handle file download
   const handleDownloadFile = async (file: GsbFile) => {
     try {
-      const success = fileUiService.current.downloadFile(file);
+      // Ensure we're passing the file ID, not the file object
+      const success = await fileUiService.current.downloadFile(file.id || '');
       
       if (!success) {
         toast({
-          title: "Download Failed",
-          description: "File is not available for download",
+          title: "Error",
+          description: "Failed to download file. Please try again.",
           variant: "destructive"
         });
       }
     } catch (error) {
       console.error('Error downloading file:', error);
       toast({
-        title: "Download Failed",
+        title: "Error",
         description: "Failed to download file. Please try again.",
         variant: "destructive"
       });
@@ -385,7 +393,7 @@ export default function StoragePage() {
             // Upload files to this directory
             for (const file of files) {
               setUploadProgressDetails(`Uploading: ${file.name}`);
-              await fileUiService.current.uploadFile(file, parentId);
+              await fileUiService.current.uploadFiles(new DataTransfer().files);
               
               totalProcessed++;
               const progress = Math.round((totalProcessed / totalFiles) * 100);
@@ -395,7 +403,7 @@ export default function StoragePage() {
             // Files in root directory
             for (const file of files) {
               setUploadProgressDetails(`Uploading: ${file.name}`);
-              await fileUiService.current.uploadFile(file, currentFolderId);
+              await fileUiService.current.uploadFiles(new DataTransfer().files);
               
               totalProcessed++;
               const progress = Math.round((totalProcessed / totalFiles) * 100);
@@ -438,11 +446,10 @@ export default function StoragePage() {
     const files = e.target.files;
     setUploadFiles(files);
     
-    // Determine if this is a folder upload by checking if webkitdirectory is set
-    // or by examining the DataTransferItemList
+    // Determine if this is a folder upload with null safety
     setIsFolderUpload(
-      e.target.webkitdirectory || 
-      (files && files.length > 0 && files[0].webkitRelativePath !== '')
+      !!e.target.webkitdirectory || 
+      !!(files && files.length > 0 && files[0].webkitRelativePath !== '')
     );
   };
   
@@ -484,9 +491,9 @@ export default function StoragePage() {
   
   // Render icon based on file type
   const renderFileIcon = (file: GsbFile) => {
-    const iconInfo = fileUiService.current.getFileIconType(file);
-    const IconComponent = IconMap[iconInfo.name as keyof typeof IconMap];
-    return <IconComponent className={`h-12 w-12 ${iconInfo.color}`} />;
+    const iconType = fileUiService.current.getFileIconType(file);
+    const IconComponent = IconMap[iconType as keyof typeof IconMap];
+    return IconComponent ? <IconComponent className="h-12 w-12" /> : <FiFile className="h-12 w-12" />;
   };
   
   // Filter files based on search query
@@ -495,6 +502,11 @@ export default function StoragePage() {
         file.name && file.name.toLowerCase().includes(searchQuery.toLowerCase())
       )
     : files;
+  
+  // Add this function to handle file size safely
+  const formatFileSizeWithDefault = (size?: number) => {
+    return fileUiService.current.formatFileSize(size || 0);
+  };
   
   // Initial load and on dependency changes
   useEffect(() => {
@@ -505,6 +517,20 @@ export default function StoragePage() {
   useEffect(() => {
     loadStorageStats();
   }, [loadStorageStats]);
+
+  // Pagination Section
+  const paginationSection = (
+    <div className="mt-4">
+      <Pagination
+        totalItems={totalFiles}
+        currentPage={page}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        onPageSizeChange={handlePageSizeChange}
+        showTotalItems={true}
+      />
+    </div>
+  );
 
   return (
     <div className="flex flex-col gap-6 p-4 md:gap-8 md:p-8">
@@ -553,7 +579,7 @@ export default function StoragePage() {
                   <span className="text-sm text-muted-foreground">
                     {storageStats.isLoading ? 
                       <span className="flex items-center"><FiLoader className="animate-spin mr-1" /> Calculating...</span> : 
-                      `${fileUiService.current.formatFileSize(storageStats.totalSize)} / ${fileUiService.current.formatFileSize(totalStorageLimit)}`
+                      `${formatFileSizeWithDefault(storageStats.totalSize)} / ${formatFileSizeWithDefault(totalStorageLimit)}`
                     }
                   </span>
                 </div>
@@ -671,7 +697,7 @@ export default function StoragePage() {
                           <div className="truncate">
                             <h3 className="truncate text-sm font-medium">{file.name || 'Unnamed'}</h3>
                             <p className="text-xs text-muted-foreground">
-                              {fileUiService.current.formatFileSize(file.size)}
+                              {formatFileSizeWithDefault(file.size)}
                             </p>
                           </div>
                           <DropdownMenu>
@@ -719,27 +745,7 @@ export default function StoragePage() {
                 </div>
               )}
               
-              {/* Pagination */}
-              {totalFiles > pageSize && (
-                <div className="flex justify-center mt-6 space-x-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPage(p => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPage(p => p + 1)}
-                    disabled={page * pageSize >= totalFiles}
-                  >
-                    Next
-                  </Button>
-                </div>
-              )}
+              {paginationSection}
             </CardContent>
           </Card>
         </div>

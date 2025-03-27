@@ -57,6 +57,7 @@ import { setGsbToken, setGsbTenantCode } from '@/lib/gsb/config/gsb-config';
 import ClientOnly from "@/components/client-only";
 import { useRouter } from "next/navigation";
 import { createClientComponent } from "@/components/dynamic-component";
+import { Pagination } from '@/components/gsb';
 
 // Constants
 
@@ -153,6 +154,12 @@ function DatabasePageContent() {
     if (currentPage * pageSize < totalCount) {
       setCurrentPage(currentPage + 1);
     }
+  };
+  
+  // Handle page size change
+  const handlePageSizeChange = (newPageSize: number) => {
+    setCurrentPage(1); // Reset to first page when changing page size
+    setPageSize(newPageSize);
   };
 
   // Format date string safely - ensure consistent output to avoid hydration issues
@@ -349,31 +356,13 @@ function DatabasePageContent() {
               </ClientOnly>
             </CardContent>
             <CardFooter className="flex items-center justify-between border-t px-6 py-4">
-              <div className="text-sm text-muted-foreground">
-                Showing <strong>{entityDefs.length}</strong> of{" "}
-                <strong>{totalCount !== -1 ? totalCount : 'many'}</strong> tables
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={currentPage <= 1 || loading}
-                  onClick={handlePreviousPage}
-                >
-                  Previous
-                </Button>
-                <span className="mx-2">
-                  Page {currentPage}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={(totalCount !== -1 && currentPage * pageSize >= totalCount) || loading}
-                  onClick={handleNextPage}
-                >
-                  Next
-                </Button>
-              </div>
+              <Pagination
+                totalItems={totalCount !== -1 ? totalCount : 0}
+                currentPage={currentPage}
+                pageSize={pageSize}
+                onPageChange={(page) => setCurrentPage(page)}
+                onPageSizeChange={handlePageSizeChange}
+              />
             </CardFooter>
           </Card>
 
