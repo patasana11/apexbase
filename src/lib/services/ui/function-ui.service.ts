@@ -130,7 +130,6 @@ export class FunctionUiService {
    */
   createEmptyFunction(name: string): GsbWfFunction {
     return {
-      id: '',
       name: name,
       title: name,
       code: this.getDefaultFunctionCode(),

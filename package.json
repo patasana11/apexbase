@@ -7,7 +7,13 @@
     "build": "npx next build",
     "build:same": "npx next build && mkdir -p build && cp -r .next/standalone/* build/ && cp -r .next/static build/static/",
     "start": "npx next start -H 0.0.0.0",
-    "test": "vitest"
+    "test": "vitest",
+    "test:selenium": "bash src/tests/selenium/run-tests.sh",
+    "test:selenium:homepage": "bash src/tests/selenium/run-tests.sh homepage",
+    "test:selenium:login": "bash src/tests/selenium/run-tests.sh login",
+    "test:selenium:dashboard": "bash src/tests/selenium/run-tests.sh dashboard",
+    "test:selenium:functions": "bash src/tests/selenium/run-tests.sh functions",
+    "test:selenium:visual": "bash src/tests/selenium/run-tests.sh --no-headless"
   },
   "keywords": [
     "baas",
@@ -77,11 +83,15 @@
     "@types/node": "^20.17.24",
     "@types/react": "18.3.18",
     "@types/react-dom": "^18.3.0",
+    "@types/selenium-webdriver": "^4.1.28",
     "autoprefixer": "^10.4.18",
+    "chromedriver": "^134.0.5",
     "eslint": "^9.0.0",
     "eslint-config-next": "^15.1.7",
     "postcss": "^8.4.35",
+    "selenium-webdriver": "^4.30.0",
     "tailwindcss": "^3.4.1",
+    "ts-node": "^10.9.2",
     "typescript": "5.8.2",
     "vitest": "^1.4.0"
   }

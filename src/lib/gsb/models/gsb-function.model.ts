@@ -141,8 +141,8 @@ export interface GsbWfOperation {
  * Represents a GSB WF Function entity
  */
 export interface GsbWfFunction {
-  id: string;
-  name: string;
+  id?: string;
+  name?: string;
   title?: string;
   code?: string;
   references?: GsbWfCodeLibrary[];
