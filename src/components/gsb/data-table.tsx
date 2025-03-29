@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Table,
   TableBody,
@@ -11,13 +11,15 @@ import { Pagination } from './pagination';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Download, Filter } from 'lucide-react';
+import { Search, Download, Filter, Trash2 } from 'lucide-react';
 
 export interface Column<T> {
   key: string;
   header: React.ReactNode;
   cell: (item: T, index: number) => React.ReactNode;
   className?: string;
+  editable?: boolean;
+  editor?: (value: any, onChange: (value: any) => void) => React.ReactNode;
 }
 
 export interface DataTableProps<T> {
@@ -110,6 +112,16 @@ export interface DataTableProps<T> {
    * Whether to show filter button
    */
   showFilter?: boolean;
+
+  /**
+   * Called when a cell is edited
+   */
+  onCellEdit?: (rowIndex: number, columnKey: string, value: any) => void;
+
+  /**
+   * Called when a row is deleted
+   */
+  onDeleteRow?: (rowIndex: number) => void;
 }
 
 export function DataTable<T>({
@@ -131,8 +143,12 @@ export function DataTable<T>({
   showSearch = true,
   showExport = true,
   showFilter = true,
+  onCellEdit,
+  onDeleteRow,
 }: DataTableProps<T>) {
-  const [localSearchQuery, setLocalSearchQuery] = React.useState(searchQuery);
+  const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery);
+  const [editingCell, setEditingCell] = useState<{ rowIndex: number; columnKey: string } | null>(null);
+  const [editValue, setEditValue] = useState<any>(null);
   
   // Handle search submission
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -146,6 +162,37 @@ export function DataTable<T>({
   React.useEffect(() => {
     setLocalSearchQuery(searchQuery);
   }, [searchQuery]);
+
+  // Handle cell edit start
+  const handleCellEditStart = (rowIndex: number, columnKey: string, value: any) => {
+    setEditingCell({ rowIndex, columnKey });
+    setEditValue(value);
+  };
+
+  // Handle cell edit save
+  const handleCellEditSave = () => {
+    if (editingCell && onCellEdit) {
+      onCellEdit(editingCell.rowIndex, editingCell.columnKey, editValue);
+      setEditingCell(null);
+      setEditValue(null);
+    }
+  };
+
+  // Handle cell edit cancel
+  const handleCellEditCancel = () => {
+    setEditingCell(null);
+    setEditValue(null);
+  };
+
+  // Handle cell edit value change
+  const handleCellEditChange = (value: any) => {
+    setEditValue(value);
+  };
+
+  // Get cell value safely
+  const getCellValue = (item: T, key: string): any => {
+    return (item as any)[key];
+  };
   
   return (
     <div className={cn("space-y-4", className)}>
@@ -206,6 +253,7 @@ export function DataTable<T>({
                   {column.header}
                 </TableHead>
               ))}
+              {onDeleteRow && <TableHead className="w-[50px]" />}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -218,19 +266,20 @@ export function DataTable<T>({
                       <div className="h-4 bg-muted rounded w-full" />
                     </TableCell>
                   ))}
+                  {onDeleteRow && <TableCell />}
                 </TableRow>
               ))
             ) : error ? (
               // Error state
               <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={columns.length + (onDeleteRow ? 1 : 0)} className="h-24 text-center text-muted-foreground">
                   {error}
                 </TableCell>
               </TableRow>
             ) : data.length === 0 ? (
               // Empty state
               <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={columns.length + (onDeleteRow ? 1 : 0)} className="h-24 text-center text-muted-foreground">
                   No results found.
                 </TableCell>
               </TableRow>
@@ -239,10 +288,63 @@ export function DataTable<T>({
               data.map((item, index) => (
                 <TableRow key={index}>
                   {columns.map((column, colIndex) => (
-                    <TableCell key={`${index}-${colIndex}`} className={column.className}>
-                      {column.cell(item, index)}
+                    <TableCell 
+                      key={`${index}-${colIndex}`} 
+                      className={cn(
+                        column.className,
+                        column.editable && 'cursor-pointer hover:bg-muted/50'
+                      )}
+                      onClick={() => column.editable && handleCellEditStart(index, column.key, getCellValue(item, column.key))}
+                    >
+                      {editingCell?.rowIndex === index && editingCell?.columnKey === column.key ? (
+                        <div className="flex items-center gap-2">
+                          {column.editor ? (
+                            column.editor(editValue, handleCellEditChange)
+                          ) : (
+                            <Input
+                              value={editValue || ''}
+                              onChange={(e) => handleCellEditChange(e.target.value)}
+                              className="h-8"
+                            />
+                          )}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCellEditSave();
+                            }}
+                          >
+                            Save
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCellEditCancel();
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      ) : (
+                        column.cell(item, index)
+                      )}
                     </TableCell>
                   ))}
+                  {onDeleteRow && (
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => onDeleteRow(index)}
+                        className="h-8 w-8"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))
             )}

@@ -215,7 +215,7 @@ export class GsbEntityService {
             protocol: 'https',
             hostName: 'api',
             content: req
-        }, '/api/entity/getDefinition', token, tenantCode);
+        }, '/api/entityDef/get', token, tenantCode);
         return response as GsbDefinitionResponse;
     }
 

@@ -324,7 +324,10 @@ function DatabasePageContent() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem className="cursor-pointer">
+                                <DropdownMenuItem 
+                                  className="cursor-pointer"
+                                  onClick={() => router.push(`/dashboard/database/${entityDef.id}`)}
+                                >
                                   <FiEye className="mr-2 h-4 w-4" />
                                   Browse Data
                                 </DropdownMenuItem>

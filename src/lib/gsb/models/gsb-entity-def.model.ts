@@ -23,6 +23,27 @@ export enum ActivityLogLevel {
 }
 
 /**
+ * Enum for data types that matches backend values
+ */
+export enum DataType {
+  Unknown = 0,
+  Guid = 1,
+  Decimal = 2,
+  Int = 3,
+  Long = 4,
+  StringUnicode = 5,
+  Binary = 6,
+  Bool = 7,
+  Enum = 8,
+  DateTime = 9,
+  Reference = 10,
+  Raw = 11,
+  File = 12,
+  StringASCII = 13,
+  JSON = 14
+}
+
+/**
  * Represents a GSB Entity Definition
  */
 export interface GsbEntityDef {
@@ -48,9 +69,10 @@ export interface GsbEntityDef {
  * Represents a property of a GSB Entity Definition
  */
 export interface GsbProperty {
-  id?: string;
+  id: string;
   name: string;
-  title?: string;
+  title: string;
+  description?: string;
   definition_id: string;
   isRequired?: boolean;
   isIndexed?: boolean;
@@ -68,10 +90,48 @@ export interface GsbProperty {
   refEntDef_id?: string;
   refEntPropName?: string;
   cascadeReference?: boolean;
+  enum_id?: string;
   formModes?: number;
   updateFormMode?: number;
   viewFormMode?: number;
   createFormMode?: number;
   listScreens?: number;
   orderNumber?: number;
+}
+
+/**
+ * Represents a property definition in the GSB system
+ */
+export interface PropertyDefinition {
+  id: string;
+  dataType: DataType;
+  title: string;
+  name: string;
+  description?: string;
+  maxLength?: number;
+  scale?: number;
+  regex?: string;
+  usage?: number;
+  createDate?: Date;
+  lastUpdateDate?: Date;
+  lastUpdatedBy?: {
+    title: string;
+    id: string;
+  };
+  defaultControlComponent?: {
+    title: string;
+    id: string;
+  };
+  defaultControlComponentMulti?: {
+    title: string;
+    id: string;
+  };
+  module?: {
+    title: string;
+    id: string;
+  };
+  createdBy?: {
+    title: string;
+    id: string;
+  };
 }
