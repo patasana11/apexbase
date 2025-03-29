@@ -1,4 +1,4 @@
-import { WebDriver, By, until, Key } from 'selenium-webdriver';
+import { WebDriver, By, until, Key, WebElement } from 'selenium-webdriver';
 import { setupDriver, captureBrowserLogs, captureScreenshot, waitForElement } from './setup';
 import { describe, it, beforeEach, afterEach } from 'vitest';
 import assert from 'assert';
@@ -14,10 +14,30 @@ const TEST_TIMEOUT = 120000; // Increase timeout for very complex operations
 const TEST_FUNCTION_NAME = `test-function-${randomUUID().substring(0, 8)}`;
 const TEST_FUNCTION_DESCRIPTION = 'Automated test function created by Selenium';
 
+// Add new constants for operations testing
+const TEST_OPERATION_NAME = `test-operation-${randomUUID().substring(0, 8)}`;
+const TEST_OPERATION_CODE = `
+async function handler(event) {
+  return {
+    statusCode: 200,
+    body: JSON.stringify({
+      message: "Test operation executed successfully",
+      timestamp: new Date().toISOString()
+    })
+  };
+}`;
+
 // Mock function test flag - set to true when function creation fails due to server errors
 let MOCK_FUNCTION_TEST = false;
 // Flag to track if we can't navigate to function details
 let CANT_OPEN_FUNCTION = false;
+
+// Add type definitions for WebElement variables
+let ourFunctionRow: WebElement | null = null;
+let editButton: WebElement | null = null;
+let saveButton: WebElement | null = null;
+let deleteButton: WebElement | null = null;
+let confirmButton: WebElement | null = null;
 
 describe('Functions Page Tests', () => {
   let driver: WebDriver;
@@ -66,6 +86,10 @@ describe('Functions Page Tests', () => {
       // Find and open our newly created function
       try {
         await findAndOpenTestFunction();
+        
+        // Test operations if we successfully opened the function
+        await testOperations();
+        
       } catch (error) {
         console.error('Could not open function details:', error);
         CANT_OPEN_FUNCTION = true;
@@ -344,13 +368,74 @@ describe('Functions Page Tests', () => {
         console.log('Error setting description:', error);
       }
       
-      // Add operations/code to the function (abbreviated from original code)
+      // Add operations/code to the function
       try {
-        console.log('Looking for code editor...');
-        // Skip code editor for now as it's complex and may not be essential
-        console.log('Skipping code editor for now');
+        console.log('Looking for operations section...');
+        
+        // Look for "Add Operation" or similar button
+        const addOperationButtons = await driver.findElements(
+          By.css('button[class*="add"], button[class*="new"], button[class*="operation"]')
+        );
+        
+        if (addOperationButtons.length > 0) {
+          console.log('Found add operation button');
+          await addOperationButtons[0].click();
+          await driver.sleep(2000);
+          
+          // Look for operation name input
+          const operationNameInputs = await driver.findElements(
+            By.css('input[name*="operation"], input[placeholder*="operation"], input[aria-label*="operation"]')
+          );
+          
+          if (operationNameInputs.length > 0) {
+            await operationNameInputs[0].clear();
+            await operationNameInputs[0].sendKeys(TEST_OPERATION_NAME);
+            console.log(`Entered operation name: ${TEST_OPERATION_NAME}`);
+          }
+          
+          // Look for code editor
+          console.log('Looking for code editor...');
+          const codeEditors = await driver.findElements(
+            By.css('textarea[class*="code"], div[class*="editor"], pre[class*="code"]')
+          );
+          
+          if (codeEditors.length > 0) {
+            console.log('Found code editor');
+            // Try to set code using JavaScript
+            await driver.executeScript(`
+              arguments[0].value = arguments[1];
+              // Trigger any change events
+              arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
+            `, codeEditors[0], TEST_OPERATION_CODE);
+            
+            console.log('Entered operation code');
+          } else {
+            console.log('Code editor not found, trying alternative approach');
+            
+            // Try to find any textarea or contenteditable div
+            const textAreas = await driver.findElements(By.css('textarea, div[contenteditable="true"]'));
+            if (textAreas.length > 0) {
+              await textAreas[0].clear();
+              await textAreas[0].sendKeys(TEST_OPERATION_CODE);
+              console.log('Entered operation code in textarea');
+            }
+          }
+          
+          // Look for save/confirm button for the operation
+          const saveOperationButtons = await driver.findElements(
+            By.css('button[class*="save"], button[class*="confirm"], button[class*="done"]')
+          );
+          
+          if (saveOperationButtons.length > 0) {
+            await saveOperationButtons[0].click();
+            console.log('Saved operation');
+            await driver.sleep(2000);
+          }
+        } else {
+          console.log('Add operation button not found');
+        }
       } catch (error) {
-        console.warn('Error handling code editor:', error);
+        console.warn('Error handling operations:', error);
       }
       
       // Save the function
@@ -499,6 +584,79 @@ describe('Functions Page Tests', () => {
     }
   }
 
+  // Helper function to test operations
+  async function testOperations(): Promise<void> {
+    try {
+      console.log('Testing operations...');
+      
+      // Look for operations list or table
+      const operationElements = await driver.findElements(
+        By.css('tr[class*="operation"], div[class*="operation"], [role="row"]')
+      );
+      
+      console.log(`Found ${operationElements.length} operation elements`);
+      
+      // Look for our test operation
+      let foundOperation = false;
+      for (const element of operationElements) {
+        try {
+          const text = await element.getText();
+          if (text.includes(TEST_OPERATION_NAME)) {
+            console.log(`Found test operation: "${text}"`);
+            foundOperation = true;
+            
+            // Look for test/run button
+            const testButtons = await element.findElements(
+              By.css('button[class*="test"], button[class*="run"], button[class*="execute"]')
+            );
+            
+            if (testButtons.length > 0) {
+              console.log('Found test button, attempting to run operation');
+              await testButtons[0].click();
+              await driver.sleep(5000); // Wait for execution
+              
+              // Look for results
+              const resultElements = await driver.findElements(
+                By.css('[class*="result"], [class*="output"], [class*="response"]')
+              );
+              
+              if (resultElements.length > 0) {
+                const resultText = await resultElements[0].getText();
+                console.log(`Operation result: ${resultText}`);
+                
+                // Verify the result contains expected content
+                if (resultText.includes('statusCode: 200') || resultText.includes('Test operation executed successfully')) {
+                  console.log('Operation test successful');
+                } else {
+                  console.warn('Operation test completed but result unexpected');
+                }
+              }
+            }
+            break;
+          }
+        } catch (e: unknown) {
+          if (e instanceof Error) {
+            console.log('Error checking operation element:', e.message);
+          } else {
+            console.log('Error checking operation element: unknown error');
+          }
+        }
+      }
+      
+      if (!foundOperation) {
+        console.warn('Test operation not found in the list');
+      }
+      
+      // Take a screenshot of the operations section
+      await captureScreenshot(driver, 'operations_test');
+      
+    } catch (error) {
+      console.error('Failed to test operations:', error);
+      await captureScreenshot(driver, 'operations_test_failure');
+      throw error;
+    }
+  }
+
   // Helper function to find and open our test function
   async function findAndOpenTestFunction(): Promise<void> {
     try {
@@ -558,7 +716,6 @@ describe('Functions Page Tests', () => {
       
       console.log(`Found ${functionRows.length} potential clickable rows/items`);
       
-      let ourFunctionRow = null;
       for (const row of functionRows) {
         try {
           const text = await row.getText();
@@ -567,8 +724,12 @@ describe('Functions Page Tests', () => {
             ourFunctionRow = row;
             break;
           }
-        } catch (e) {
-          // Skip items we can't read text from
+        } catch (e: unknown) {
+          if (e instanceof Error) {
+            console.log('Error checking row text:', e.message);
+          } else {
+            console.log('Error checking row text: unknown error');
+          }
         }
       }
       
@@ -595,8 +756,12 @@ describe('Functions Page Tests', () => {
               console.log(`Successfully clicked item ${i+1}`);
               ourFunctionRow = items[i];
               break;
-            } catch (e) {
-              console.log(`Failed to click item ${i+1}:`, e.message);
+            } catch (e: unknown) {
+              if (e instanceof Error) {
+                console.log(`Failed to click item ${i+1}:`, e.message);
+              } else {
+                console.log(`Failed to click item ${i+1}: unknown error`);
+              }
             }
           }
         }
@@ -695,7 +860,6 @@ describe('Functions Page Tests', () => {
         By.css('button[class*="edit"], a[class*="edit"]')
       );
       
-      let editButton = null;
       for (const button of editButtons) {
         const text = await button.getText();
         const ariaLabel = await button.getAttribute('aria-label');
@@ -748,7 +912,6 @@ describe('Functions Page Tests', () => {
         By.css('button[type="submit"], button[class*="save"], button[class*="update"]')
       );
       
-      let saveButton = null;
       for (const button of saveButtons) {
         const text = await button.getText();
         if (
@@ -810,7 +973,6 @@ describe('Functions Page Tests', () => {
         By.css('button[class*="delete"], button[class*="remove"], a[class*="delete"]')
       );
       
-      let deleteButton = null;
       for (const button of deleteButtons) {
         const text = await button.getText();
         const ariaLabel = await button.getAttribute('aria-label');
@@ -848,7 +1010,6 @@ describe('Functions Page Tests', () => {
         By.css('button[class*="confirm"], button[class*="danger"], button[class*="delete"]')
       );
       
-      let confirmButton = null;
       for (const button of confirmButtons) {
         const text = await button.getText();
         if (
