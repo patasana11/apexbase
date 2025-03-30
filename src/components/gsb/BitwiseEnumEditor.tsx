@@ -23,12 +23,68 @@ const BitwiseEnumEditor = forwardRef((props: BitwiseEnumEditorProps, ref) => {
     }
   }, [props.value, props.values]);
 
+  // Position the dropdown based on available space
+  useEffect(() => {
+    if (containerRef.current) {
+      const grid = document.querySelector('.ag-root-wrapper');
+      if (!grid) return;
+      
+      const gridRect = grid.getBoundingClientRect();
+      const cellRect = props.eGridCell.getBoundingClientRect();
+      const dropdownHeight = containerRef.current.offsetHeight;
+      const dropdownWidth = containerRef.current.offsetWidth;
+      
+      // Check if there's enough space below
+      const spaceBelow = gridRect.bottom - cellRect.bottom;
+      const spaceAbove = cellRect.top - gridRect.top;
+      
+      // Position vertically
+      if (spaceBelow < dropdownHeight && spaceAbove > dropdownHeight) {
+        // Position above the cell
+        containerRef.current.style.top = `-${dropdownHeight}px`;
+      } else {
+        // Position below or partially overlapping if necessary
+        containerRef.current.style.top = '0';
+      }
+      
+      // Position horizontally to prevent overflow
+      const rightOverflow = cellRect.left + dropdownWidth - gridRect.right;
+      if (rightOverflow > 0) {
+        containerRef.current.style.left = `-${rightOverflow}px`;
+      }
+    }
+  }, []);
+
   // Focus the search input on mount
   useEffect(() => {
     if (inputRef.current) {
       inputRef.current.focus();
     }
   }, []);
+
+  // Handle keyboard events for component
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      props.api.stopEditing();
+    } else if (event.key === 'Enter' && event.ctrlKey) {
+      handleApply();
+    }
+  };
+  
+  // Apply changes and close editor
+  const handleApply = () => {
+    const finalValue = selectedValues.length > 0 
+      ? selectedValues.reduce((acc, val) => acc | val, 0) 
+      : 0;
+      
+    // Set the value in the cell
+    props.api.stopEditing();
+    
+    // Sometimes stopEditing doesn't properly trigger getValue, so we update the cell value directly
+    if (props.node && props.column) {
+      props.node.setDataValue(props.column, finalValue);
+    }
+  };
 
   // Implement AG Grid's cell editor interface
   useImperativeHandle(ref, () => ({
@@ -49,6 +105,11 @@ const BitwiseEnumEditor = forwardRef((props: BitwiseEnumEditorProps, ref) => {
     // We need this for proper popup handling
     isPopup() {
       return true;
+    },
+    
+    // Get preferred dropdown position
+    getPopupPosition() {
+      return 'under';
     }
   }));
 
@@ -108,11 +169,12 @@ const BitwiseEnumEditor = forwardRef((props: BitwiseEnumEditorProps, ref) => {
         borderRadius: '4px',
         boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
         position: 'absolute',
-        zIndex: 100,
+        zIndex: 9999, // Ensure it's on top of everything
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column'
       }}
+      onKeyDown={handleKeyDown}
     >
       {/* Header with search */}
       <div style={{ 
@@ -256,24 +318,43 @@ const BitwiseEnumEditor = forwardRef((props: BitwiseEnumEditorProps, ref) => {
         padding: '8px', 
         borderTop: '1px solid #eee',
         display: 'flex',
-        justifyContent: 'flex-end',
+        justifyContent: 'space-between',
         backgroundColor: '#f9f9f9'
       }}>
-        <button 
-          onClick={() => props.stopEditing()}
-          style={{ 
-            padding: '6px 12px',
-            backgroundColor: '#0066cc',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '13px',
-            fontWeight: 'bold'
-          }}
-        >
-          Apply
-        </button>
+        <div style={{ fontSize: '12px', color: '#666', display: 'flex', alignItems: 'center' }}>
+          <span>Ctrl+Enter to apply</span>
+        </div>
+        <div>
+          <button 
+            onClick={() => props.api.stopEditing(true)}
+            style={{ 
+              padding: '6px 12px',
+              backgroundColor: 'transparent',
+              border: '1px solid #ddd',
+              marginRight: '8px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '13px'
+            }}
+          >
+            Cancel
+          </button>
+          <button 
+            onClick={handleApply}
+            style={{ 
+              padding: '6px 12px',
+              backgroundColor: '#0066cc',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: 'bold'
+            }}
+          >
+            Apply
+          </button>
+        </div>
       </div>
     </div>
   );
