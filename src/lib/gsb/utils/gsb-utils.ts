@@ -55,3 +55,48 @@ export function getGsbDateSortCols(sortByCreateDate = false, ascending = false) 
     }
   ];
 }
+
+/**
+ * Utility class for GSB operations
+ */
+export class GsbUtils {
+  /**
+   * Checks if an ID is empty (null, undefined, or empty GUID)
+   * @param id The ID to check
+   * @returns true if the ID is empty, false otherwise
+   */
+  public static isIdEmpty(id: string | null | undefined): boolean {
+    if (!id) return true;
+    
+    // Check for empty GUID (all zeros)
+    const emptyGuidRegex = /^[0-]{36}$/;
+    return emptyGuidRegex.test(id);
+  }
+
+  /**
+   * Checks if an ID is valid (not empty and not an empty GUID)
+   * @param id The ID to check
+   * @returns true if the ID is valid, false otherwise
+   */
+  public static isValidId(id: string | null | undefined): boolean {
+    return !this.isIdEmpty(id);
+  }
+
+  /**
+   * Checks if an array of IDs contains any empty IDs
+   * @param ids Array of IDs to check
+   * @returns true if any ID is empty, false otherwise
+   */
+  public static hasEmptyIds(ids: (string | null | undefined)[]): boolean {
+    return ids.some(id => this.isIdEmpty(id));
+  }
+
+  /**
+   * Filters out empty IDs from an array
+   * @param ids Array of IDs to filter
+   * @returns Array of valid IDs
+   */
+  public static filterEmptyIds(ids: (string | null | undefined)[]): string[] {
+    return ids.filter(id => this.isValidId(id)) as string[];
+  }
+}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react';
 import { GsbDataTable } from '@/components/gsb/gsb-data-table';
 import { GsbDataTableService } from '@/lib/gsb/services/entity/gsb-data-table.service';
 import { GsbCacheService } from '@/lib/gsb/services/cache/gsb-cache.service';
@@ -9,12 +9,13 @@ import { Search } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface PageProps {
-  params: {
+  params: Promise<{
     name: string;
-  };
+  }>;
 }
 
 export default function EntityDataPage({ params }: PageProps) {
+  const resolvedParams = use(params);
   const router = useRouter();
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,13 +25,16 @@ export default function EntityDataPage({ params }: PageProps) {
   const [pageSize, setPageSize] = useState(10);
   const [searchQuery, setSearchQuery] = useState('');
   const [entityTitle, setEntityTitle] = useState('');
+  const [sortField, setSortField] = useState<string | undefined>(undefined);
+  const [sortDirection, setSortDirection] = useState<'ASC' | 'DESC'>('ASC');
+  const [filters, setFilters] = useState<Record<string, any>>({});
 
   // Load entity definition for title
   useEffect(() => {
     const loadEntityDef = async () => {
       try {
         const cacheService = GsbCacheService.getInstance();
-        const { entityDef } = await cacheService.getEntityDefWithPropertiesByName(params.name);
+        const { entityDef } = await cacheService.getEntityDefWithPropertiesByName(resolvedParams.name);
         if (entityDef) {
           setEntityTitle(entityDef.title || entityDef.name);
         } else {
@@ -43,23 +47,25 @@ export default function EntityDataPage({ params }: PageProps) {
       }
     };
 
-    if (params.name) {
+    if (resolvedParams.name) {
       loadEntityDef();
     }
-  }, [params.name, router]);
+  }, [resolvedParams.name, router]);
 
-  // Load data with pagination and search
+  // Load data with pagination, search, sorting and filtering
   useEffect(() => {
     const loadData = async () => {
       try {
         setLoading(true);
         const dataTableService = GsbDataTableService.getInstance();
         
-        const response = await dataTableService.queryEntities(params.name, {
+        const response = await dataTableService.queryEntities(resolvedParams.name, {
           page,
           pageSize,
           searchQuery,
-          // Add sorting and filtering options as needed
+          sortField,
+          sortDirection,
+          filters
         });
         
         setData(response.data);
@@ -72,15 +78,26 @@ export default function EntityDataPage({ params }: PageProps) {
       }
     };
 
-    if (params.name) {
-      // Add debounce to search
-      const timeoutId = setTimeout(() => {
-        loadData();
-      }, 300);
+    // Add debounce to search
+    const timeoutId = setTimeout(() => {
+      loadData();
+    }, 300);
 
-      return () => clearTimeout(timeoutId);
-    }
-  }, [params.name, page, pageSize, searchQuery]);
+    return () => clearTimeout(timeoutId);
+  }, [resolvedParams.name, page, pageSize, searchQuery, sortField, sortDirection, filters]);
+
+  // Handle sort change
+  const handleSortChange = (field: string, direction: 'ASC' | 'DESC') => {
+    setSortField(field);
+    setSortDirection(direction);
+    setPage(1); // Reset to first page when sorting changes
+  };
+
+  // Handle filter change
+  const handleFilterChange = (newFilters: Record<string, any>) => {
+    setFilters(newFilters);
+    setPage(1); // Reset to first page when filters change
+  };
 
   if (loading) {
     return (
@@ -99,9 +116,9 @@ export default function EntityDataPage({ params }: PageProps) {
   }
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-bold">{entityTitle || params.name}</h1>
+    <div className="flex flex-col h-full">
+      <div className="flex justify-between items-center p-4 border-b">
+        <h1 className="text-2xl font-bold">{entityTitle || resolvedParams.name}</h1>
         <div className="relative w-64">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
@@ -112,9 +129,9 @@ export default function EntityDataPage({ params }: PageProps) {
           />
         </div>
       </div>
-      <div className="h-[calc(100vh-200px)]">
+      <div className="flex-1 p-4">
         <GsbDataTable 
-          entityDefName={params.name}
+          entityDefName={resolvedParams.name}
           data={data}
           onDataChange={setData}
           totalCount={totalCount}
@@ -122,6 +139,8 @@ export default function EntityDataPage({ params }: PageProps) {
           pageSize={pageSize}
           onPageChange={setPage}
           onPageSizeChange={setPageSize}
+          onSortChange={handleSortChange}
+          onFilterChange={handleFilterChange}
         />
       </div>
     </div>

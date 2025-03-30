@@ -89,7 +89,7 @@ export class GsbEntityService {
         const result = await this.get(req, token, tenantCode);
         return result.entity as T;
     }
-
+    //todo: use te get copy method of api
     async getCopy<T extends object>(definitionType: (new () => T) | string, id: string, token?: string, tenantCode?: string): Promise<T | null> {
         const entity = await this.getById(definitionType, id, token, tenantCode);
         if (entity) {
@@ -98,7 +98,8 @@ export class GsbEntityService {
         return entity;
     }
 
-    async get(req: GsbSaveRequest, token?: string, tenantCode?: string): Promise<GsbQueryResponse> {
+    async get(req: QueryParams<any>, token?: string, tenantCode?: string): Promise<GsbQueryResponse> {
+        req.disableTransaction = true;
         console.log(`Getting entity, definition: ${req.entDefName}, id: ${req.entityId}`);
         try {
             const response = await this.apiService.callApi({
@@ -116,6 +117,7 @@ export class GsbEntityService {
 
     async query(req: QueryParams<any>, token?: string, tenantCode?: string): Promise<GsbQueryResponse> {
         console.log(`Querying entities, definition: ${req.entDefName}`);
+        req.disableTransaction = true;
         try {
             const response = await this.apiService.callApi({
                 method: 'POST',

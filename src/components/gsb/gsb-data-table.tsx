@@ -23,12 +23,19 @@ import {
   TextEditorModule,
   CellStyleModule,
   RowSelectionModule,
-  Theme,
-  TooltipModule
+  TooltipModule,
+  PaginationModule,
+  SortModelItem,
+  FilterModel,
+  EventApiModule,
+  CheckboxEditorModule,
+  InfiniteRowModelModule
 } from 'ag-grid-community';
-import { GsbEntityDef, GsbProperty } from '@/lib/gsb/models/gsb-entity-def.model';
+import { GsbEntityDef } from '@/lib/gsb/models/gsb-entity-def.model';
 import { GsbCacheService } from '@/lib/gsb/services/cache/gsb-cache.service';
 import { GsbEnum } from '@/lib/gsb/models/gsb-enum.model';
+import { PropertyDefinition } from '@/lib/gsb/models/property-definition.model';
+import { GsbUtils } from '@/lib/gsb/utils/gsb-utils';
 
 // Import AG Grid styles - using only the new theme
 import 'ag-grid-community/styles/ag-grid.css';
@@ -49,7 +56,11 @@ ModuleRegistry.registerModules([
   TextEditorModule,
   CellStyleModule,
   RowSelectionModule,
-  TooltipModule
+  TooltipModule,
+  PaginationModule,
+  EventApiModule,
+  CheckboxEditorModule,
+  InfiniteRowModelModule
 ]);
 
 interface GsbDataTableProps {
@@ -61,6 +72,8 @@ interface GsbDataTableProps {
   pageSize: number;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
+  onSortChange?: (field: string, direction: 'ASC' | 'DESC') => void;
+  onFilterChange?: (filters: Record<string, any>) => void;
 }
 
 export function GsbDataTable({ 
@@ -71,41 +84,44 @@ export function GsbDataTable({
   page,
   pageSize,
   onPageChange,
-  onPageSizeChange
+  onPageSizeChange,
+  onSortChange,
+  onFilterChange
 }: GsbDataTableProps) {
   const [gridApi, setGridApi] = useState<GridApi | null>(null);
   const [columns, setColumns] = useState<Column[] | null>(null);
   const [entityDef, setEntityDef] = useState<GsbEntityDef | null>(null);
-  const [propertyDefs, setPropertyDefs] = useState<GsbProperty[]>([]);
+  const [propertyDefs, setPropertyDefs] = useState<PropertyDefinition[]>([]);
   const [enumCache, setEnumCache] = useState<Map<string, GsbEnum>>(new Map());
   const [rowData, setRowData] = useState<any[]>([]);
 
   // Get specific column configuration based on property type
-  const getColumnTypeConfig = (prop: GsbProperty): Partial<ColDef> => {
+  const getColumnTypeConfig = (prop: PropertyDefinition): Partial<ColDef> => {
     // Handle required fields
     const baseConfig: Partial<ColDef> = {
-      editable: !prop.isRequired,
-      sortable: prop.isSearchable,
-      filter: prop.isSearchable,
+      editable: true,
+      sortable: true,
+      filter: true,
       resizable: true,
       floatingFilter: true,
+      minWidth: 100,
+      maxWidth: 300,
       // Add validation for required fields
-      ...(prop.isRequired && {
+      ...(prop.usage === 1 && {
         cellClass: 'required-field',
-        cellStyle: { 'background-color': '#fff3f3' }
+        cellStyle: { backgroundColor: '#fff3f3' }
       })
     };
 
     // Handle enum fields
     if (prop.enum_id) {
-      const enumDef = enumCache.get(prop.enum_id);
       return {
         ...baseConfig,
         cellEditor: 'agSelectCellEditor',
         cellEditorParams: {
-          values: enumDef?.values?.map(v => v.value) || [],
+          values: [], // Will be populated from enum cache
           cellRenderer: (params: ICellRendererParams) => {
-            const enumValue = enumDef?.values?.find(v => v.value === params.value);
+            const enumValue = enumCache.get(prop.enum_id!)?.values?.find(v => v.value === params.value);
             return enumValue?.title || params.value;
           }
         }
@@ -129,10 +145,12 @@ export function GsbDataTable({
     }
 
     // Handle numeric fields
-    if (typeof prop.scale === 'number') {
+    if (prop.dataType === 'DECIMAL' || prop.dataType === 'INT' || prop.dataType === 'LONG') {
       return {
         ...baseConfig,
         filter: 'agNumberColumnFilter',
+        minWidth: 120,
+        maxWidth: 150,
         valueFormatter: (params: ValueFormatterParams) => {
           if (params.value) {
             return Number(params.value).toLocaleString(undefined, {
@@ -146,11 +164,13 @@ export function GsbDataTable({
     }
 
     // Handle date fields
-    if (prop.name.toLowerCase().includes('date')) {
+    if (prop.dataType === 'DATETIME') {
       return {
         ...baseConfig,
-        filter: 'agDateColumnFilter',
+        filter: 'agDateFilter',
         cellEditor: 'agDateCellEditor',
+        minWidth: 150,
+        maxWidth: 180,
         valueFormatter: (params: ValueFormatterParams) => {
           if (params.value) {
             return new Date(params.value).toLocaleDateString();
@@ -161,11 +181,13 @@ export function GsbDataTable({
     }
 
     // Handle text fields with max length
-    if (prop.maxLength) {
+    if (prop.dataType === 'STRING_UNICODE' || prop.dataType === 'STRING_ASCII') {
       return {
         ...baseConfig,
         filter: 'agTextColumnFilter',
         cellEditor: 'agTextCellEditor',
+        minWidth: 150,
+        maxWidth: 300,
         cellEditorParams: {
           maxLength: prop.maxLength
         }
@@ -189,7 +211,7 @@ export function GsbDataTable({
         field: prop.name,
         headerName: prop.title,
         // Add tooltip for required fields
-        headerTooltip: prop.isRequired ? `${prop.title} (Required)` : prop.title,
+        headerTooltip: prop.usage === 1 ? `${prop.title} (Required)` : prop.title,
         // Add tooltip for fields with description
         tooltipField: prop.name,
         // Add tooltip for reference fields
@@ -214,49 +236,27 @@ export function GsbDataTable({
         const cacheService = GsbCacheService.getInstance();
         const { entityDef, propertyDefs } = await cacheService.getEntityDefWithPropertiesByName(entityDefName);
         setEntityDef(entityDef);
-
-        // Convert PropertyDefinition[] to GsbProperty[]
-        const gsbProperties = propertyDefs.map(def => ({
-          ...def,
-          definition_id: def.id,
-          isRequired: false,
-          isIndexed: false,
-          isPrimaryKey: false,
-          isPartialPrimaryKey: false,
-          isUnique: false,
-          isEncrypted: false,
-          isSearchable: def.isSearchable || false,
-          isListed: def.isListed || false,
-          isMultiLingual: def.isMultiLingual || false,
-          maxLength: def.maxLength,
-          scale: def.scale,
-          defaultValue: def.defaultValue,
-          refType: def.refType,
-          refEntDef_id: def.refEntDef_id,
-          refEntPropName: def.refEntPropName,
-          cascadeReference: def.cascadeReference || false,
-          enum_id: def.enum_id,
-          formModes: def.formModes,
-          updateFormMode: def.updateFormMode,
-          viewFormMode: def.viewFormMode,
-          createFormMode: def.createFormMode,
-          listScreens: def.listScreens,
-          orderNumber: def.orderNumber
-        } as GsbProperty));
-        setPropertyDefs(gsbProperties);
+        setPropertyDefs(propertyDefs);
 
         if (entityDef?.properties) {
           // Collect all enum IDs
           const enumIds = entityDef.properties
-            .filter(prop => prop.enum_id)
-            .map(prop => prop.enum_id!)
-            .filter(Boolean); // Filter out any undefined or null values
+            .filter(prop => prop.enum_id && GsbUtils.isValidId(prop.enum_id))
+            .map(prop => prop.enum_id!);
 
-          if (enumIds.length > 0) {
-            // Fetch all enums at once
-            const enums = await cacheService.getEnums(enumIds);
-            setEnumCache(enums);
-          }
+          // Load all enums
+          const enums = await Promise.all(
+            enumIds.map(id => cacheService.getEnum(id))
+          );
+
+          // Create enum cache
+          const enumMap = new Map<string, GsbEnum>();
+          enums.forEach(enumDef => {
+            if (enumDef && GsbUtils.isValidId(enumDef.id)) {
+              enumMap.set(enumDef.id!, enumDef);
+            }
+          });
+          setEnumCache(enumMap);
         }
       } catch (error) {
         console.error('Error loading entity definition:', error);
@@ -271,66 +271,75 @@ export function GsbDataTable({
     setRowData(data);
   }, [data]);
 
-  // Grid options configuration
+  // Grid ready event handler
+  const onGridReady = (params: GridReadyEvent) => {
+    setGridApi(params.api);
+    if (params.api) {
+      setColumns(params.api.getColumnDefs() as Column[]);
+      params.api.sizeColumnsToFit();
+
+      // Add event listeners for sorting and filtering
+      params.api.addEventListener('sortChanged', () => {
+        const sortModel = params.api.getColumnDefs() as SortModelItem[];
+        if (sortModel.length > 0) {
+          const { colId, sort } = sortModel[0];
+          onSortChange?.(colId, sort as 'ASC' | 'DESC');
+        }
+      });
+
+      params.api.addEventListener('filterChanged', () => {
+        const filterModel = params.api.getFilterModel() as FilterModel;
+        onFilterChange?.(filterModel);
+      });
+    }
+  };
+
+  // Grid options
   const gridOptions: GridOptions = {
-    theme: 'legacy', // Use legacy theme to avoid conflicts with CSS
+    columnDefs,
+    rowData,
+    onGridReady,
+    pagination: true,
+    paginationPageSize: pageSize,
+    rowModelType: 'infinite',
+    rowSelection: 'multiple',
+    enableCellTextSelection: true,
+    ensureDomOrder: true,
+    suppressColumnVirtualisation: true,
+    theme: 'legacy',
+    domLayout: 'normal',
+    maxBlocksInCache: 1,
+    cacheBlockSize: pageSize,
+    infiniteInitialRowCount: totalCount,
+    maxConcurrentDatasourceRequests: 1,
     defaultColDef: {
-      flex: 1,
-      minWidth: 100,
-      editable: true,
       sortable: true,
       filter: true,
       resizable: true,
       floatingFilter: true,
-      // Add tooltip for all cells
-      tooltipField: 'field'
+      sortingOrder: ['asc', 'desc', null]
     },
-    rowSelection: 'multiple',
-    animateRows: true,
-    // Styling
-    rowHeight: 28,
-    headerHeight: 32,
-    // Enable tooltips
-    enableCellTextSelection: true,
-    // Pagination
-    pagination: true,
-    paginationPageSize: pageSize,
-    rowModelType: 'clientSide',
-    // Events
-    onCellValueChanged: (event) => {
-      if (onDataChange) {
-        const newData = [...rowData];
-        const rowIndex = event.rowIndex!;
-        newData[rowIndex] = event.data;
-        onDataChange(newData);
+    // Add these options for better scrolling behavior
+    suppressRowClickSelection: true,
+    suppressCellFocus: false,
+    suppressRowVirtualisation: true,
+    datasource: {
+      getRows: (params) => {
+        const page = params.startRow / pageSize;
+        onPageChange(page + 1);
+        params.successCallback(data, totalCount);
       }
-    },
-    onGridReady: (params: GridReadyEvent) => {
-      setGridApi(params.api);
-      setColumns(params.api.getColumns());
-      params.api.sizeColumnsToFit();
-    },
-    onPaginationChanged: (event) => {
-      const newPage = event.api.paginationGetCurrentPage() + 1;
-      const newPageSize = event.api.paginationGetPageSize();
-      onPageChange(newPage);
-      onPageSizeChange(newPageSize);
     }
   };
 
   return (
-    <div className="w-full h-full ag-theme-alpine">
-      <AgGridReact
-        gridOptions={gridOptions}
-        columnDefs={columnDefs}
-        rowData={rowData}
-        animateRows={true}
-        rowSelection="multiple"
-        suppressRowClickSelection={true}
-        pagination={true}
-        paginationPageSize={pageSize}
-        rowModelType="clientSide"
-      />
+    <div className="flex flex-col h-full w-full">
+      <div className="ag-theme-alpine flex-grow w-full overflow-auto" style={{ height: 'calc(100vh - 200px)' }}>
+        <AgGridReact
+          {...gridOptions}
+          className="h-full w-full"
+        />
+      </div>
     </div>
   );
 } 

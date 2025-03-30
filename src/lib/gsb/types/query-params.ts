@@ -24,6 +24,7 @@ export class QueryParams<T extends object> {
     mapColName?: string | undefined;
     widgetQuery?: any;
     filterQuery?: any;
+    disableTransaction: boolean = false;
 
     get entDefId() {
         if (this.entityDef)

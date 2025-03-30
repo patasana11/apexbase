@@ -179,10 +179,8 @@ export class GsbCacheService {
       const { token, tenantCode } = await this.getAuthParams();
 
       // If not in cache or expired, fetch from API
-      const queryParams = new EntityQueryParams(GsbEnum);
-      queryParams
-        .prop(item => item.id)
-        .isEqual(enumId);
+      const queryParams = new EntityQueryParams("GsbEnum");
+      queryParams.where('id', enumId);
       queryParams.incS('values');
 
       const response = await this.entityService.query(queryParams, token, tenantCode);
