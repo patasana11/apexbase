@@ -1,91 +1,122 @@
 import { GsbEntityService } from './gsb-entity.service';
 import { GsbEntityDef } from '../../models/gsb-entity-def.model';
 import { QueryParams } from '../../types/query-params';
-import { SingleQuery, QueryFunction, QueryRelation } from '../../types/query';
+import { SingleQuery, QueryFunction, QueryRelation, QueryType } from '../../types/query';
 import { getGsbToken, getGsbTenantCode } from '../../config/gsb-config';
 import { GsbSaveRequest } from '../../types/requests';
+import { GsbCacheService } from '../cache/gsb-cache.service';
 
 export interface DataTableQueryOptions {
-  page: number;
-  pageSize: number;
+  page?: number;
+  pageSize?: number;
   searchQuery?: string;
   sortField?: string;
   sortDirection?: 'ASC' | 'DESC';
   filters?: Record<string, any>;
 }
 
-export class GsbDataTableService {
-  private entityService: GsbEntityService;
+export interface DataTableResponse {
+  data: any[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
 
-  constructor() {
-    this.entityService = new GsbEntityService();
+export class GsbDataTableService {
+  private static instance: GsbDataTableService;
+  private entityService: GsbEntityService;
+  private cacheService: GsbCacheService;
+
+  private constructor() {
+    this.entityService = GsbEntityService.getInstance();
+    this.cacheService = GsbCacheService.getInstance();
+  }
+
+  public static getInstance(): GsbDataTableService {
+    if (!GsbDataTableService.instance) {
+      GsbDataTableService.instance = new GsbDataTableService();
+    }
+    return GsbDataTableService.instance;
   }
 
   /**
-   * Query entities for the data table
-   * @param entityDef The entity definition
-   * @param options Query options
-   * @returns Promise with query results
+   * Get entity definition with properties
+   * @param entityDefName The name of the entity definition
+   * @returns Promise with entity definition and properties
    */
-  async queryEntities(entityDef: GsbEntityDef, options: DataTableQueryOptions) {
+  public async getEntityDefinition(entityDefName: string) {
+    return this.cacheService.getEntityDefWithPropertiesByName(entityDefName);
+  }
+
+  /**
+   * Query entities for the data table with pagination and search
+   * @param entityDefName The entity definition name
+   * @param options Query options including pagination, search, and filtering
+   * @returns Promise with query results and pagination info
+   */
+  async queryEntities(
+    entityDefName: string,
+    options: DataTableQueryOptions = {}
+  ): Promise<DataTableResponse> {
     try {
-      const queryParams = new QueryParams(entityDef.name);
-      queryParams.startIndex = (options.page - 1) * options.pageSize;
-      queryParams.count = options.pageSize;
+      const {
+        page = 1,
+        pageSize = 10,
+        searchQuery,
+        sortField,
+        sortDirection = 'ASC',
+        filters
+      } = options;
+
+      // Get entity definition
+      const { entityDef } = await this.getEntityDefinition(entityDefName);
+      
+      if (!entityDef) {
+        throw new Error('Entity definition not found');
+      }
+
+      // Get auth params
+      const { token, tenantCode } = await this.cacheService.getAuthParams();
+
+      // Create query parameters
+      const queryParams = new QueryParams(entityDefName);
+      queryParams.queryType = QueryType.Full;
+
+      // Add pagination
+      queryParams.startIndex = (page - 1) * pageSize;
+      queryParams.count = pageSize;
       queryParams.calcTotalCount = true;
 
       // Add search query if provided
-      if (options.searchQuery) {
-        const searchableProps = entityDef.properties?.filter(p => p.isSearchable) || [];
-        if (searchableProps.length > 0) {
-          if (searchableProps.length > 1) {
-            // Create a parent query with OR relation
-            const parentQuery = new SingleQuery();
-            parentQuery.relation = QueryRelation.Or;
-            parentQuery.children = searchableProps.map(prop => 
-              new SingleQuery(prop.name, options.searchQuery, QueryFunction.Like)
-            );
-            queryParams.query?.push(parentQuery);
-          } else {
-            // Single searchable property
-            queryParams.query?.push(
-              new SingleQuery(searchableProps[0].name, options.searchQuery, QueryFunction.Like)
-            );
-          }
-        }
+      if (searchQuery) {
+        queryParams.filter = searchQuery; // GSB handles search automatically
+      }
+
+      // Add sorting if provided
+      if (sortField) {
+        queryParams.sortCols = [{
+          col: { name: sortField },
+          sortType: sortDirection
+        }];
       }
 
       // Add filters if provided
-      if (options.filters) {
-        Object.entries(options.filters).forEach(([key, value]) => {
+      if (filters) {
+        Object.entries(filters).forEach(([key, value]) => {
           if (value !== undefined && value !== null && value !== '') {
-            queryParams.query?.push(
-              new SingleQuery(key, value, QueryFunction.Equals)
-            );
+            queryParams.where(key, value);
           }
         });
       }
 
-      // Add sorting if provided
-      if (options.sortField) {
-        queryParams.sortCols = [{
-          col: {
-            name: options.sortField
-          },
-          sortType: options.sortDirection || 'ASC'
-        }];
-      }
-
       // Execute query
-      const result = await this.entityService.query(
-        queryParams,
-        getGsbToken(),
-        getGsbTenantCode()
-      );
+      const response = await this.entityService.query(queryParams, token, tenantCode);
 
       return {
-        data: result.entities || [],
-        totalCount: result.totalCount || 0
+        data: response.entities || [],
+        totalCount: response.totalCount || 0,
+        page,
+        pageSize
       };
     } catch (error) {
       console.error('Error querying entities:', error);
@@ -94,65 +125,21 @@ export class GsbDataTableService {
   }
 
   /**
-   * Export entities to CSV
-   * @param entityDef The entity definition
-   * @param options Query options
-   * @returns Promise with CSV data
+   * Save entity changes
+   * @param entityDefName The entity definition name
+   * @param entity The entity data to save
+   * @returns Promise with save response
    */
-  async exportToCsv(entityDef: GsbEntityDef, options: DataTableQueryOptions) {
+  async saveEntity(entityDefName: string, entity: any) {
     try {
-      // Get all data without pagination
-      const result = await this.queryEntities(entityDef, {
-        ...options,
-        pageSize: 1000 // Get a larger chunk of data
-      });
+      const { token, tenantCode } = await this.cacheService.getAuthParams();
+      
+      const saveRequest: GsbSaveRequest = {
+        entDefName: entityDefName,
+        entity
+      };
 
-      // Convert to CSV
-      const headers = entityDef.properties
-        ?.filter(p => p.isListed)
-        .map(p => p.title || p.name) || [];
-
-      const rows = result.data.map(entity => 
-        headers.map(header => {
-          const prop = entityDef.properties?.find(p => p.title === header || p.name === header);
-          if (!prop) return '';
-          const value = entity[prop.name];
-          return value?.toString() || '';
-        })
-      );
-
-      // Combine headers and rows
-      const csvContent = [
-        headers.join(','),
-        ...rows.map(row => row.join(','))
-      ].join('\n');
-
-      return csvContent;
-    } catch (error) {
-      console.error('Error exporting to CSV:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Save entity data
-   * @param entityDef The entity definition
-   * @param data The entity data to save
-   * @returns Promise with saved entity
-   */
-  async saveEntity(entityDef: GsbEntityDef, data: any) {
-    try {
-      const request = new GsbSaveRequest();
-      request.entDefName = entityDef.name;
-      request.entity = data;
-
-      const result = await this.entityService.save(
-        request,
-        getGsbToken(),
-        getGsbTenantCode()
-      );
-
-      return result;
+      return await this.entityService.save(saveRequest, token, tenantCode);
     } catch (error) {
       console.error('Error saving entity:', error);
       throw error;
@@ -160,24 +147,23 @@ export class GsbDataTableService {
   }
 
   /**
-   * Delete entity
-   * @param entityDef The entity definition
-   * @param entityId The entity ID to delete
-   * @returns Promise
+   * Delete entities
+   * @param entityDefName The entity definition name
+   * @param entityIds Array of entity IDs to delete
+   * @returns Promise with delete response
    */
-  async deleteEntity(entityDef: GsbEntityDef, entityId: string) {
+  async deleteEntities(entityDefName: string, entityIds: string[]) {
     try {
-      const request = new GsbSaveRequest();
-      request.entDefName = entityDef.name;
-      request.entityId = entityId;
+      const { token, tenantCode } = await this.cacheService.getAuthParams();
+      
+      const deleteRequest: GsbSaveRequest = {
+        entDefName: entityDefName,
+        entity: { ids: entityIds }
+      };
 
-      await this.entityService.delete(
-        request,
-        getGsbToken(),
-        getGsbTenantCode()
-      );
+      return await this.entityService.delete(deleteRequest, token, tenantCode);
     } catch (error) {
-      console.error('Error deleting entity:', error);
+      console.error('Error deleting entities:', error);
       throw error;
     }
   }

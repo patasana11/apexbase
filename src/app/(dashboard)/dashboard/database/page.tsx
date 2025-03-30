@@ -52,14 +52,10 @@ import {
 } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { GsbEntityDef } from '@/lib/gsb/models/gsb-entity-def.model';
-import { EntityDefService } from '@/lib/gsb/services/entity/entity-def.service';
-import { setGsbToken, setGsbTenantCode } from '@/lib/gsb/config/gsb-config';
+import { GsbCacheService } from '@/lib/gsb/services/cache/gsb-cache.service';
 import ClientOnly from "@/components/client-only";
 import { useRouter } from "next/navigation";
-import { createClientComponent } from "@/components/dynamic-component";
 import { Pagination } from '@/components/gsb';
-
-// Constants
 
 function DatabasePageContent() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -70,7 +66,6 @@ function DatabasePageContent() {
   const [pageSize, setPageSize] = useState(10);
   const [isClient, setIsClient] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [debugInfo, setDebugInfo] = useState<string | null>(null);
   const router = useRouter();
 
   // Mark when component is mounted on client
@@ -78,9 +73,6 @@ function DatabasePageContent() {
     console.log("Component mounted, setting isClient = true");
     setIsClient(true);
   }, []);
-
-  // Initialize token and service when component mounts
-
 
   // Update when page changes
   useEffect(() => {
@@ -97,34 +89,28 @@ function DatabasePageContent() {
     setError(null);
 
     try {
-
       console.log(`Fetching entity definitions - page: ${page}, search: ${search}`);
 
-      const entityDefService = new EntityDefService();
-      console.log("EntityDefService created");
+      const cacheService = GsbCacheService.getInstance();
+      console.log("GsbCacheService created");
 
-      let result;
+      const entityDefs = await cacheService.getEntityDefinitions();
+      console.log(`Fetched ${entityDefs.length} entity definitions`);
 
-      if (search) {
-        console.log(`Searching entity definitions with term: ${search}`);
-        result = await entityDefService.searchEntityDefs(search, page, pageSize);
-      } else {
-        console.log(`Getting all entity definitions - page ${page}`);
-        result = await entityDefService.getEntityDefs(page, pageSize);
-      }
+      // Filter by search query if provided
+      const filteredDefs = search
+        ? entityDefs.filter(def => 
+            def.name.toLowerCase().includes(search.toLowerCase()) ||
+            def.title?.toLowerCase().includes(search.toLowerCase())
+          )
+        : entityDefs;
 
-      if (!result) {
-        throw new Error("No data received from server");
-      }
+      // Apply pagination
+      const startIndex = (page - 1) * pageSize;
+      const paginatedDefs = filteredDefs.slice(startIndex, startIndex + pageSize);
 
-      console.log(`Fetched ${result.entityDefs?.length || 0} entity definitions. Total: ${result.totalCount}`);
-
-      if (result.entityDefs?.length > 0) {
-        console.log("Sample entity def:", result.entityDefs[0]);
-      }
-
-      setEntityDefs(result.entityDefs || []);
-      setTotalCount(result.totalCount || 0);
+      setEntityDefs(paginatedDefs);
+      setTotalCount(filteredDefs.length);
     } catch (error) {
       console.error("Error fetching entity definitions:", error);
       setError(`Failed to fetch data: ${error instanceof Error ? error.message : String(error)}`);
@@ -205,343 +191,120 @@ function DatabasePageContent() {
         </p>
       </div>
 
-      <Tabs defaultValue="tables" className="space-y-4">
-        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-          <TabsList>
-            <TabsTrigger value="tables">Tables</TabsTrigger>
-            <TabsTrigger value="queries">SQL Editor</TabsTrigger>
-            <TabsTrigger value="relationships">Relationships</TabsTrigger>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
-          </TabsList>
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <FiSearch className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                type="search"
-                placeholder="Search tables..."
-                className="pl-8 sm:w-[200px] md:w-[300px]"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              />
-            </div>
+            <Input
+              placeholder="Search entity definitions..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              className="w-[300px]"
+            />
             <Button onClick={handleSearch}>
               <FiSearch className="mr-2 h-4 w-4" />
               Search
             </Button>
-            <Button onClick={() => router.push('/dashboard/database/new')}>
-              <FiPlus className="mr-2 h-4 w-4" />
-              New Table
-            </Button>
           </div>
+          <Button onClick={() => router.push('/dashboard/database/new')}>
+            <FiPlus className="mr-2 h-4 w-4" />
+            New Entity
+          </Button>
         </div>
 
-        <TabsContent value="tables" className="space-y-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle>Database Tables</CardTitle>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm">
-                    <FiFilter className="mr-2 h-4 w-4" />
-                    Filter
-                  </Button>
-                  <Button variant="outline" size="sm">
-                    <FiDownload className="mr-2 h-4 w-4" />
-                    Export
-                  </Button>
-                </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Entity Definitions</CardTitle>
+            <CardDescription>
+              List of all entity definitions in the system
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="flex h-[400px] items-center justify-center">
+                <FiLoader className="h-8 w-8 animate-spin" />
               </div>
-              <CardDescription>
-                Manage your database tables and entity definitions.
-              </CardDescription>
-              {debugInfo && (
-                <div className="mt-2 text-xs text-muted-foreground">
-                  <code>{debugInfo}</code>
-                </div>
-              )}
-            </CardHeader>
-            <CardContent className="p-0">
-              {error && (
-                <div className="p-4 mb-4 text-red-700 bg-red-100 rounded-md">
-                  <p>{error}</p>
-                </div>
-              )}
-              <ClientOnly>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Database Table</TableHead>
-                      <TableHead className="hidden md:table-cell">Title</TableHead>
-                      <TableHead className="hidden md:table-cell">Status</TableHead>
-                      <TableHead className="hidden md:table-cell">Last Modified</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+            ) : error ? (
+              <div className="flex h-[400px] items-center justify-center text-red-500">
+                {error}
+              </div>
+            ) : entityDefs.length === 0 ? (
+              <div className="flex h-[400px] items-center justify-center text-muted-foreground">
+                No entity definitions found
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Title</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead>Last Updated</TableHead>
+                    <TableHead className="w-[100px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {entityDefs.map((entityDef) => (
+                    <TableRow key={entityDef.id}>
+                      <TableCell className="font-medium">{entityDef.name}</TableCell>
+                      <TableCell>{entityDef.title}</TableCell>
+                      <TableCell>{entityDef.description}</TableCell>
+                      <TableCell>{formatDate(entityDef.createDate)}</TableCell>
+                      <TableCell>{formatDate(entityDef.lastUpdateDate)}</TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <FiMoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => router.push(`/dashboard/database/${entityDef.name}`)}>
+                              <FiEye className="mr-2 h-4 w-4" />
+                              View Data
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => router.push(`/dashboard/database/${entityDef.name}/edit`)}>
+                              <FiEdit2 className="mr-2 h-4 w-4" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => router.push(`/dashboard/database/${entityDef.name}/copy`)}>
+                              <FiCopy className="mr-2 h-4 w-4" />
+                              Copy
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-red-600">
+                              <FiTrash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {loading ? (
-                      <TableRow>
-                        <TableCell colSpan={6} className="h-24 text-center">
-                          <div className="flex items-center justify-center">
-                            <FiLoader className="h-6 w-6 animate-spin mr-2" />
-                            <span>Loading tables...</span>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ) : entityDefs.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={6} className="h-24 text-center">
-                          No tables found
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      entityDefs.map((entityDef) => (
-                        <TableRow key={entityDef.id}>
-                          <TableCell className="font-medium">{entityDef.name}</TableCell>
-                          <TableCell>{entityDef.dbTableName || 'N/A'}</TableCell>
-                          <TableCell className="hidden md:table-cell">
-                            {entityDef.title || 'N/A'}
-                          </TableCell>
-                          <TableCell className="hidden md:table-cell">
-                            <Badge variant={entityDef.isActive !== false ? 'default' : 'secondary'}>
-                              {entityDef.isActive !== false ? 'Active' : 'Inactive'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="hidden md:table-cell">
-                            {formatDate(entityDef.lastUpdateDate)}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8"
-                                >
-                                  <FiMoreHorizontal className="h-4 w-4" />
-                                  <span className="sr-only">Actions</span>
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem 
-                                  className="cursor-pointer"
-                                  onClick={() => router.push(`/dashboard/database/${entityDef.id}`)}
-                                >
-                                  <FiEye className="mr-2 h-4 w-4" />
-                                  Browse Data
-                                </DropdownMenuItem>
-                                <DropdownMenuItem className="cursor-pointer">
-                                  <FiEdit2 className="mr-2 h-4 w-4" />
-                                  Edit Structure
-                                </DropdownMenuItem>
-                                <DropdownMenuItem className="cursor-pointer">
-                                  <FiSettings className="mr-2 h-4 w-4" />
-                                  Manage Policies
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem className="cursor-pointer">
-                                  <FiCopy className="mr-2 h-4 w-4" />
-                                  Duplicate
-                                </DropdownMenuItem>
-                                <DropdownMenuItem className="cursor-pointer text-red-600">
-                                  <FiTrash2 className="mr-2 h-4 w-4" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </ClientOnly>
-            </CardContent>
-            <CardFooter className="flex items-center justify-between border-t px-6 py-4">
-              <Pagination
-                totalItems={totalCount !== -1 ? totalCount : 0}
-                currentPage={currentPage}
-                pageSize={pageSize}
-                onPageChange={(page) => setCurrentPage(page)}
-                onPageSizeChange={handlePageSizeChange}
-              />
-            </CardFooter>
-          </Card>
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <Card>
-              <CardHeader>
-                <CardTitle>Database Stats</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div>
-                    <div className="text-sm font-medium text-muted-foreground">
-                      Total Tables
-                    </div>
-                    <div className="text-2xl font-bold">
-                      <ClientOnly>
-                        {loading ? <FiLoader className="h-4 w-4 animate-spin" /> :
-                        totalCount !== -1 ? totalCount : 'Many'}
-                      </ClientOnly>
-                    </div>
-                  </div>
-                  <Separator />
-                  <div>
-                    <div className="text-sm font-medium text-muted-foreground">
-                      Active Tables
-                    </div>
-                    <div className="text-2xl font-bold">
-                      <ClientOnly>
-                        {loading ? <FiLoader className="h-4 w-4 animate-spin" /> :
-                          entityDefs.filter(def => def.isActive !== false).length}
-                      </ClientOnly>
-                    </div>
-                  </div>
-                  <Separator />
-                  <div>
-                    <div className="text-sm font-medium text-muted-foreground">
-                      Table Types
-                    </div>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      <ClientOnly>
-                        {!loading && entityDefs.length > 0 && (
-                          <>
-                            <Badge variant="default" className="text-xs">
-                              {entityDefs.filter(def => def.name?.startsWith('Gsb')).length} System
-                            </Badge>
-                            <Badge variant="outline" className="text-xs">
-                              {entityDefs.filter(def => !def.name?.startsWith('Gsb')).length} Custom
-                            </Badge>
-                          </>
-                        )}
-                      </ClientOnly>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Recent Queries</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {[
-                    "SELECT * FROM users WHERE last_login > NOW() - INTERVAL '7 days'",
-                    "UPDATE products SET stock = stock - 1 WHERE id = 245",
-                    "INSERT INTO orders (user_id, total) VALUES (42, 129.99)",
-                  ].map((query, i) => (
-                    <div key={i} className="rounded-md bg-muted p-3">
-                      <code className="text-xs">{query}</code>
-                      <div className="mt-2 text-xs text-muted-foreground">
-                        {i === 0 ? "2 minutes ago" : i === 1 ? "45 minutes ago" : "1 hour ago"}
-                      </div>
-                    </div>
                   ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Quick Actions</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col gap-2">
-                  <Button variant="outline" className="justify-start" onClick={() => router.push('/dashboard/database/new')}>
-                    <FiPlus className="mr-2 h-4 w-4" />
-                    Create New Table
-                  </Button>
-                  <Button variant="outline" className="justify-start">
-                    <FiCode className="mr-2 h-4 w-4" />
-                    SQL Editor
-                  </Button>
-                  <Button variant="outline" className="justify-start">
-                    <FiLink className="mr-2 h-4 w-4" />
-                    Create Relationship
-                  </Button>
-                  <Button variant="outline" className="justify-start">
-                    <FiDownload className="mr-2 h-4 w-4" />
-                    Backup Database
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="queries">
-          <Card>
-            <CardHeader>
-              <CardTitle>SQL Editor</CardTitle>
-              <CardDescription>
-                Write and execute SQL queries against your database.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex h-80 items-center justify-center rounded-md border border-dashed">
-                <div className="flex flex-col items-center justify-center text-center">
-                  <FiCode className="h-10 w-10 text-muted-foreground" />
-                  <h3 className="mt-4 text-lg font-medium">SQL Editor</h3>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    The SQL Editor will be implemented in the next phase.
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="relationships">
-          <Card>
-            <CardHeader>
-              <CardTitle>Table Relationships</CardTitle>
-              <CardDescription>
-                Manage foreign key relationships between your tables.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex h-80 items-center justify-center rounded-md border border-dashed">
-                <div className="flex flex-col items-center justify-center text-center">
-                  <FiLink className="h-10 w-10 text-muted-foreground" />
-                  <h3 className="mt-4 text-lg font-medium">Relationship Manager</h3>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    The Relationship Manager will be implemented in the next phase.
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="settings">
-          <Card>
-            <CardHeader>
-              <CardTitle>Database Settings</CardTitle>
-              <CardDescription>
-                Configure your database settings and preferences.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex h-80 items-center justify-center rounded-md border border-dashed">
-                <div className="flex flex-col items-center justify-center text-center">
-                  <FiSettings className="h-10 w-10 text-muted-foreground" />
-                  <h3 className="mt-4 text-lg font-medium">Database Settings</h3>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Database Settings will be implemented in the next phase.
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+          <CardFooter>
+            <Pagination
+              totalItems={totalCount}
+              currentPage={currentPage}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={handlePageSizeChange}
+            />
+          </CardFooter>
+        </Card>
+      </div>
     </div>
   );
 }
 
-// Export the wrapped version
-export default createClientComponent(DatabasePageContent);
+export default function DatabasePage() {
+  return (
+    <ClientOnly>
+      <DatabasePageContent />
+    </ClientOnly>
+  );
+}

@@ -235,7 +235,7 @@ export class IncludeQuery<T extends object> extends QueryParams<T> {
 } 
 
 export class EntityQueryParams<T extends object> extends QueryParams<T>{
-    constructor(private definition: new () => T, widgetQuery = undefined, includes = undefined, filterQuery = undefined) {
+    constructor(definition: string | { new(): T }, widgetQuery = undefined, includes = undefined, filterQuery = undefined) {
         super(definition, widgetQuery, includes, filterQuery);
     }
 } 

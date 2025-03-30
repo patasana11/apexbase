@@ -209,14 +209,20 @@ export class GsbEntityService {
         return response as GsbQueryOpResponse;
     }
 
-    async getDefinition(req: any, token?: string, tenantCode?: string): Promise<GsbDefinitionResponse> {
-        const response = await this.apiService.callApi({
-            method: 'POST',
-            protocol: 'https',
-            hostName: 'api',
-            content: req
-        }, '/api/entityDef/get', token, tenantCode);
-        return response as GsbDefinitionResponse;
+    async getDefinition(req: { entityDef: { id?: string; name?: string } }, token?: string, tenantCode?: string): Promise<GsbDefinitionResponse> {
+        console.log(`Getting entity definition, id: ${req.entityDef.id}, name: ${req.entityDef.name}`);
+        try {
+            const response = await this.apiService.callApi({
+                method: 'POST',
+                protocol: 'https',
+                hostName: 'api',
+                content: req
+            }, '/api/entityDef/get', token, tenantCode);
+            return response as GsbDefinitionResponse;
+        } catch (error) {
+            console.error(`Get entity definition failed:`, error);
+            throw error;
+        }
     }
 
     async delete(req: GsbSaveRequest, token?: string, tenantCode?: string): Promise<GsbQueryOpResponse> {

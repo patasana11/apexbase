@@ -10,28 +10,69 @@ import {
   Column,
   ColDef,
   ModuleRegistry,
-  ClientSideRowModelModule
+  ClientSideRowModelModule,
+  RowApiModule,
+  ColumnApiModule,
+  TextFilterModule,
+  NumberFilterModule,
+  DateFilterModule,
+  ColumnAutoSizeModule,
+  ValidationModule,
+  DateEditorModule,
+  SelectEditorModule,
+  TextEditorModule,
+  CellStyleModule,
+  RowSelectionModule,
+  Theme,
+  TooltipModule
 } from 'ag-grid-community';
 import { GsbEntityDef, GsbProperty } from '@/lib/gsb/models/gsb-entity-def.model';
 import { GsbCacheService } from '@/lib/gsb/services/cache/gsb-cache.service';
 import { GsbEnum } from '@/lib/gsb/models/gsb-enum.model';
 
-// Import AG Grid styles
+// Import AG Grid styles - using only the new theme
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
 
 // Register required modules
 ModuleRegistry.registerModules([
-  ClientSideRowModelModule
+  ClientSideRowModelModule,
+  RowApiModule,
+  ColumnApiModule,
+  TextFilterModule,
+  NumberFilterModule,
+  DateFilterModule,
+  ColumnAutoSizeModule,
+  ValidationModule,
+  DateEditorModule,
+  SelectEditorModule,
+  TextEditorModule,
+  CellStyleModule,
+  RowSelectionModule,
+  TooltipModule
 ]);
 
 interface GsbDataTableProps {
-  entityDefId: string;
+  entityDefName: string;
   data: any[];
   onDataChange?: (newData: any[]) => void;
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
 }
 
-export function GsbDataTable({ entityDefId, data, onDataChange }: GsbDataTableProps) {
+export function GsbDataTable({ 
+  entityDefName, 
+  data, 
+  onDataChange,
+  totalCount,
+  page,
+  pageSize,
+  onPageChange,
+  onPageSizeChange
+}: GsbDataTableProps) {
   const [gridApi, setGridApi] = useState<GridApi | null>(null);
   const [columns, setColumns] = useState<Column[] | null>(null);
   const [entityDef, setEntityDef] = useState<GsbEntityDef | null>(null);
@@ -41,43 +82,99 @@ export function GsbDataTable({ entityDefId, data, onDataChange }: GsbDataTablePr
 
   // Get specific column configuration based on property type
   const getColumnTypeConfig = (prop: GsbProperty): Partial<ColDef> => {
+    // Handle required fields
+    const baseConfig: Partial<ColDef> = {
+      editable: !prop.isRequired,
+      sortable: prop.isSearchable,
+      filter: prop.isSearchable,
+      resizable: true,
+      floatingFilter: true,
+      // Add validation for required fields
+      ...(prop.isRequired && {
+        cellClass: 'required-field',
+        cellStyle: { 'background-color': '#fff3f3' }
+      })
+    };
+
+    // Handle enum fields
     if (prop.enum_id) {
       const enumDef = enumCache.get(prop.enum_id);
       return {
+        ...baseConfig,
         cellEditor: 'agSelectCellEditor',
         cellEditorParams: {
-          values: enumDef?.values?.map(v => v.value) || []
+          values: enumDef?.values?.map(v => v.value) || [],
+          cellRenderer: (params: ICellRendererParams) => {
+            const enumValue = enumDef?.values?.find(v => v.value === params.value);
+            return enumValue?.title || params.value;
+          }
         }
       };
     }
 
-    // Determine column configuration based on property characteristics
+    // Handle reference fields
     if (prop.refType) {
       return {
+        ...baseConfig,
         filter: 'agTextColumnFilter',
-        cellEditor: 'agSelectCellEditor'
+        cellEditor: 'agSelectCellEditor',
+        cellRenderer: (params: ICellRendererParams) => {
+          if (!params.value) return '';
+          if (Array.isArray(params.value)) {
+            return params.value.map((ref: any) => ref.title).join(', ');
+          }
+          return params.value.title || params.value;
+        }
       };
     }
 
-    // Infer numeric type from scale property
+    // Handle numeric fields
     if (typeof prop.scale === 'number') {
       return {
-        type: 'numericColumn',
-        filter: 'agNumberColumnFilter'
+        ...baseConfig,
+        filter: 'agNumberColumnFilter',
+        valueFormatter: (params: ValueFormatterParams) => {
+          if (params.value) {
+            return Number(params.value).toLocaleString(undefined, {
+              minimumFractionDigits: prop.scale || 0,
+              maximumFractionDigits: prop.scale || 0
+            });
+          }
+          return '';
+        }
       };
     }
 
-    // Infer date type from property characteristics
+    // Handle date fields
     if (prop.name.toLowerCase().includes('date')) {
       return {
-        type: 'dateColumn',
+        ...baseConfig,
         filter: 'agDateColumnFilter',
-        cellEditor: 'agDateCellEditor'
+        cellEditor: 'agDateCellEditor',
+        valueFormatter: (params: ValueFormatterParams) => {
+          if (params.value) {
+            return new Date(params.value).toLocaleDateString();
+          }
+          return '';
+        }
+      };
+    }
+
+    // Handle text fields with max length
+    if (prop.maxLength) {
+      return {
+        ...baseConfig,
+        filter: 'agTextColumnFilter',
+        cellEditor: 'agTextCellEditor',
+        cellEditorParams: {
+          maxLength: prop.maxLength
+        }
       };
     }
 
     // Default to text column
     return {
+      ...baseConfig,
       filter: 'agTextColumnFilter'
     };
   };
@@ -86,38 +183,28 @@ export function GsbDataTable({ entityDefId, data, onDataChange }: GsbDataTablePr
   const columnDefs = useMemo(() => {
     if (!propertyDefs.length) return [];
 
-    return propertyDefs.map(prop => ({
-      field: prop.name,
-      headerName: prop.title,
-      editable: true,
-      sortable: prop.isSearchable,
-      filter: prop.isSearchable,
-      resizable: true,
-      // Handle enum values
-      valueFormatter: (params: ValueFormatterParams) => {
-        const value = params.value;
-        if (!value) return '';
-
-        if (prop.enum_id) {
-          const enumDef = enumCache.get(prop.enum_id);
-          if (enumDef?.values) {
-            const enumValue = enumDef.values.find(v => v.value === value);
-            return enumValue?.title || value;
+    return propertyDefs
+      .sort((a, b) => (a.orderNumber || 0) - (b.orderNumber || 0))
+      .map(prop => ({
+        field: prop.name,
+        headerName: prop.title,
+        // Add tooltip for required fields
+        headerTooltip: prop.isRequired ? `${prop.title} (Required)` : prop.title,
+        // Add tooltip for fields with description
+        tooltipField: prop.name,
+        // Add tooltip for reference fields
+        ...(prop.refType && {
+          tooltipValueGetter: (params: any) => {
+            if (!params.value) return '';
+            if (Array.isArray(params.value)) {
+              return params.value.map((ref: any) => ref.title).join(', ');
+            }
+            return params.value.title || params.value;
           }
-        }
-
-        if (prop.refType) {
-          if (Array.isArray(value)) {
-            return value.map((ref: any) => ref.title).join(', ');
-          }
-          return value.title || value;
-        }
-
-        return value;
-      },
-      // Additional column configuration based on property type
-      ...getColumnTypeConfig(prop)
-    }));
+        }),
+        // Additional column configuration based on property type
+        ...getColumnTypeConfig(prop)
+      }));
   }, [propertyDefs, enumCache]);
 
   // Load entity definition and properties
@@ -125,7 +212,7 @@ export function GsbDataTable({ entityDefId, data, onDataChange }: GsbDataTablePr
     const loadEntityDef = async () => {
       try {
         const cacheService = GsbCacheService.getInstance();
-        const { entityDef, propertyDefs } = await cacheService.getEntityDefWithProperties(entityDefId);
+        const { entityDef, propertyDefs } = await cacheService.getEntityDefWithPropertiesByName(entityDefName);
         setEntityDef(entityDef);
 
         // Convert PropertyDefinition[] to GsbProperty[]
@@ -177,7 +264,7 @@ export function GsbDataTable({ entityDefId, data, onDataChange }: GsbDataTablePr
     };
 
     loadEntityDef();
-  }, [entityDefId]);
+  }, [entityDefName]);
 
   // Update row data when data prop changes
   useEffect(() => {
@@ -186,6 +273,7 @@ export function GsbDataTable({ entityDefId, data, onDataChange }: GsbDataTablePr
 
   // Grid options configuration
   const gridOptions: GridOptions = {
+    theme: 'legacy', // Use legacy theme to avoid conflicts with CSS
     defaultColDef: {
       flex: 1,
       minWidth: 100,
@@ -193,13 +281,21 @@ export function GsbDataTable({ entityDefId, data, onDataChange }: GsbDataTablePr
       sortable: true,
       filter: true,
       resizable: true,
-      floatingFilter: true
+      floatingFilter: true,
+      // Add tooltip for all cells
+      tooltipField: 'field'
     },
     rowSelection: 'multiple',
     animateRows: true,
     // Styling
     rowHeight: 28,
     headerHeight: 32,
+    // Enable tooltips
+    enableCellTextSelection: true,
+    // Pagination
+    pagination: true,
+    paginationPageSize: pageSize,
+    rowModelType: 'clientSide',
     // Events
     onCellValueChanged: (event) => {
       if (onDataChange) {
@@ -213,6 +309,12 @@ export function GsbDataTable({ entityDefId, data, onDataChange }: GsbDataTablePr
       setGridApi(params.api);
       setColumns(params.api.getColumns());
       params.api.sizeColumnsToFit();
+    },
+    onPaginationChanged: (event) => {
+      const newPage = event.api.paginationGetCurrentPage() + 1;
+      const newPageSize = event.api.paginationGetPageSize();
+      onPageChange(newPage);
+      onPageSizeChange(newPageSize);
     }
   };
 
@@ -225,6 +327,9 @@ export function GsbDataTable({ entityDefId, data, onDataChange }: GsbDataTablePr
         animateRows={true}
         rowSelection="multiple"
         suppressRowClickSelection={true}
+        pagination={true}
+        paginationPageSize={pageSize}
+        rowModelType="clientSide"
       />
     </div>
   );

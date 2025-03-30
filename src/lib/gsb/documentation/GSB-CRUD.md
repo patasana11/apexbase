@@ -202,6 +202,36 @@ const response = await entityService.delete(deleteRequest, token, tenant);
 // - affectedRowCount: number (optional) - Number of deleted records
 ```
 
+### Query Operations
+   - Always specify pagination parameters (`startIndex` and `count`) for large datasets
+   - Use appropriate query functions for filtering
+   - Include only necessary fields in the response using `selectCols`
+   - For search operations, simply use the `filter` parameter - GSB will automatically:
+     - Search across all searchable fields
+
+### Search Implementation
+```typescript
+// Example: Simple search implementation
+const queryParams: QueryParams<any> = {
+    entDefName: 'test',
+    filter: 'search term',  // GSB handles the search automatically
+    startIndex: 0,
+    count: 10
+};
+
+const response = await entityService.query(queryParams, token, tenant);
+```
+
+GSB provides automatic search capabilities that:
+1. Search across all searchable fields defined in the entity
+2. Apply appropriate search algorithms based on field types
+3. Handle text normalization and matching
+4. Optimize search performance
+5. Support partial matches and fuzzy searching
+6. Handle special characters and case sensitivity appropriately
+
+No additional configuration is needed - just provide the search term in the `filter` parameter.
+
 ## Best Practices
 
 1. **Entity Definition Identification**
