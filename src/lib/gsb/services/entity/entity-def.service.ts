@@ -1,6 +1,6 @@
 'use client';
 
-import { GsbEntityDef, GsbProperty, PropertyDefinition } from '../../models/gsb-entity-def.model';
+import { GsbEntityDef, GsbProperty, GsbPropertyDef } from '../../models/gsb-entity-def.model';
 import { GsbEntityService } from './gsb-entity.service';
 import { GsbSaveRequest } from '../../types/requests';
 import { QueryParams } from '../../types/query-params';
@@ -485,7 +485,7 @@ export class EntityDefService {
    * Get property definitions from the GSB system
    * @returns Promise with the property definitions
    */
-  async getPropertyDefinitions(): Promise<PropertyDefinition[]> {
+  async getGsbPropertyDefs(): Promise<GsbPropertyDef[]> {
     try {
       const response = await this.entityService.getDefinition({
         entityDef: {

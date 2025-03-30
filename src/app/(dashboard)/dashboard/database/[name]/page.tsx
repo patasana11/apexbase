@@ -6,17 +6,14 @@ import { GsbDataTableService } from '@/lib/gsb/services/entity/gsb-data-table.se
 import { GsbCacheService } from '@/lib/gsb/services/cache/gsb-cache.service';
 import { Input } from '@/components/ui/input';
 import { Search } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { debounce } from 'lodash';
 
 interface PageProps {
-  params: Promise<{
-    name: string;
-  }>;
+  params: Promise<{ name: string }>;
 }
 
 export default function EntityDataPage({ params }: PageProps) {
   const resolvedParams = use(params);
-  const router = useRouter();
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +22,7 @@ export default function EntityDataPage({ params }: PageProps) {
   const [pageSize, setPageSize] = useState(10);
   const [searchQuery, setSearchQuery] = useState('');
   const [entityTitle, setEntityTitle] = useState('');
-  const [sortField, setSortField] = useState<string | undefined>(undefined);
+  const [sortField, setSortField] = useState<string | undefined>();
   const [sortDirection, setSortDirection] = useState<'ASC' | 'DESC'>('ASC');
   const [filters, setFilters] = useState<Record<string, any>>({});
 
@@ -35,105 +32,101 @@ export default function EntityDataPage({ params }: PageProps) {
       try {
         const cacheService = GsbCacheService.getInstance();
         const { entityDef } = await cacheService.getEntityDefWithPropertiesByName(resolvedParams.name);
-        if (entityDef) {
-          setEntityTitle(entityDef.title || entityDef.name);
-        } else {
-          // If entity not found, redirect to database page
-          router.push('/dashboard/database');
-        }
+        setEntityTitle(entityDef?.title || resolvedParams.name);
       } catch (error) {
         console.error('Error loading entity definition:', error);
-        setError('Failed to load entity definition');
+        setEntityTitle(resolvedParams.name);
       }
     };
 
-    if (resolvedParams.name) {
-      loadEntityDef();
-    }
-  }, [resolvedParams.name, router]);
+    loadEntityDef();
+  }, [resolvedParams.name]);
 
-  // Load data with pagination, search, sorting and filtering
+  // Load data with pagination, search, sort and filter
   useEffect(() => {
     const loadData = async () => {
       try {
         setLoading(true);
+        setError(null);
+
         const dataTableService = GsbDataTableService.getInstance();
-        
-        const response = await dataTableService.queryEntities(resolvedParams.name, {
+        const result = await dataTableService.queryEntities(
+          resolvedParams.name,
           page,
           pageSize,
           searchQuery,
           sortField,
           sortDirection,
           filters
-        });
-        
-        setData(response.data);
-        setTotalCount(response.totalCount);
+        );
+
+        setData(result.data);
+        setTotalCount(result.totalCount);
       } catch (error) {
         console.error('Error loading data:', error);
-        setError('Failed to load data');
+        setError('Failed to load data. Please try again.');
       } finally {
         setLoading(false);
       }
     };
 
-    // Add debounce to search
-    const timeoutId = setTimeout(() => {
-      loadData();
-    }, 300);
-
-    return () => clearTimeout(timeoutId);
+    loadData();
   }, [resolvedParams.name, page, pageSize, searchQuery, sortField, sortDirection, filters]);
 
-  // Handle sort change
+  // Debounced search handler
+  const debouncedSearch = debounce((value: string) => {
+    setSearchQuery(value);
+    setPage(1); // Reset to first page on search
+  }, 300);
+
+  // Handle sort changes
   const handleSortChange = (field: string, direction: 'ASC' | 'DESC') => {
     setSortField(field);
     setSortDirection(direction);
-    setPage(1); // Reset to first page when sorting changes
+    setPage(1); // Reset to first page on sort
   };
 
-  // Handle filter change
+  // Handle filter changes
   const handleFilterChange = (newFilters: Record<string, any>) => {
     setFilters(newFilters);
-    setPage(1); // Reset to first page when filters change
+    setPage(1); // Reset to first page on filter
   };
 
   if (loading) {
     return (
-      <div className="flex h-[60vh] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex h-[60vh] items-center justify-center text-red-500">
-        {error}
+      <div className="flex items-center justify-center h-full">
+        <div className="text-red-500">{error}</div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex justify-between items-center p-4 border-b">
-        <h1 className="text-2xl font-bold">{entityTitle || resolvedParams.name}</h1>
-        <div className="relative w-64">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+    <div className="flex flex-col h-full p-4 space-y-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">{entityTitle}</h1>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
           <Input
+            type="text"
             placeholder="Search..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-8"
+            className="pl-10 w-64"
+            onChange={(e) => debouncedSearch(e.target.value)}
           />
         </div>
       </div>
-      <div className="flex-1 p-4">
-        <GsbDataTable 
+
+      <div className="flex-grow">
+        <GsbDataTable
           entityDefName={resolvedParams.name}
           data={data}
-          onDataChange={setData}
           totalCount={totalCount}
           page={page}
           pageSize={pageSize}

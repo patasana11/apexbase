@@ -2,39 +2,14 @@
 
 import { GsbApiService } from '../../api/gsb-api.service';
 import { QueryParams } from '../../types/query-params';
-import { GsbSaveRequest, GsbSaveMultiRequest, GsbSaveMappedRequest, GsbGetCodeRequest } from '../../types/requests';
-import { GsbQueryResponse, GsbSaveResponse, GsbQueryOpResponse, GsbSaveMultiResponse, GsbDefinitionResponse, GsbGetCodeResponse } from '../../types/responses';
+import { GsbSaveRequest, GsbSaveMultiRequest, GsbSaveMappedRequest, GsbGetCodeRequest, GetTokenRequest } from '../../types/requests';
+import { GsbQueryResponse, GsbSaveResponse, GsbQueryOpResponse, GsbSaveMultiResponse, GsbDefinitionResponse, GsbGetCodeResponse, AuthResponse } from '../../types/responses';
 import { GSB_CONFIG } from '../../config/gsb-config';
 
 // Store a singleton instance
 let serviceInstance: GsbEntityService | null = null;
 
-interface GetTokenRequest {
-    email: string;
-    password: string;
-    remember?: boolean;
-    includeUserInfo?: boolean;
-    variation?: {
-        tenantCode: string;
-    };
-}
 
-interface AuthResponse {
-    auth: {
-        userTenant: any;
-        userToken: any;
-        userId: string;
-        token: string;
-        name: string;
-        email: string;
-        roles: string[];
-        groups: string[];
-        expireDate: string;
-        title: string;
-        opResult: boolean;
-    };
-    status: number;
-}
 
 export class GsbEntityService {
     private apiService: GsbApiService;
@@ -74,7 +49,7 @@ export class GsbEntityService {
         }
     }
 
-    async getById<T extends object>(definitionType: (new () => T) | string, id: string, token?: string, tenantCode?: string): Promise<T | null> {
+    async getById<T extends object>(definitionType: (new () => T) | string, id: string, token?: string, tenantCode?: string): Promise<GsbQueryResponse | null> {
         console.log(`Getting entity by ID: ${id}, definition type: ${typeof definitionType === 'string' ? definitionType : 'constructor'}`);
         const req = new GsbSaveRequest();
         if (typeof definitionType === 'string') {
@@ -90,7 +65,7 @@ export class GsbEntityService {
         return result.entity as T;
     }
     //todo: use te get copy method of api
-    async getCopy<T extends object>(definitionType: (new () => T) | string, id: string, token?: string, tenantCode?: string): Promise<T | null> {
+    async getCopy<T extends object>(definitionType: (new () => T) | string, id: string, token?: string, tenantCode?: string): Promise<GsbQueryResponse | null> {
         const entity = await this.getById(definitionType, id, token, tenantCode);
         if (entity) {
             delete (entity as any).id;

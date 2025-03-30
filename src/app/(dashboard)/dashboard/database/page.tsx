@@ -56,6 +56,7 @@ import { GsbCacheService } from '@/lib/gsb/services/cache/gsb-cache.service';
 import ClientOnly from "@/components/client-only";
 import { useRouter } from "next/navigation";
 import { Pagination } from '@/components/gsb';
+import { EntityDefService, entityDefService } from "@/lib/services";
 
 function DatabasePageContent() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -90,27 +91,23 @@ function DatabasePageContent() {
 
     try {
       console.log(`Fetching entity definitions - page: ${page}, search: ${search}`);
+      const entityDefService = new EntityDefService();
 
-      const cacheService = GsbCacheService.getInstance();
       console.log("GsbCacheService created");
 
-      const entityDefs = await cacheService.getEntityDefinitions();
-      console.log(`Fetched ${entityDefs.length} entity definitions`);
+      let result;
+      if (search) {
+        console.log(`Searching entity definitions with term: ${search}`);
+        result = await entityDefService.searchEntityDefs(search, page, pageSize);
+      } else {
+        console.log(`Getting all entity definitions - page ${page}`);
+        result = await entityDefService.getEntityDefs(page, pageSize);
+      }
 
-      // Filter by search query if provided
-      const filteredDefs = search
-        ? entityDefs.filter(def => 
-            def.name.toLowerCase().includes(search.toLowerCase()) ||
-            def.title?.toLowerCase().includes(search.toLowerCase())
-          )
-        : entityDefs;
 
       // Apply pagination
-      const startIndex = (page - 1) * pageSize;
-      const paginatedDefs = filteredDefs.slice(startIndex, startIndex + pageSize);
-
-      setEntityDefs(paginatedDefs);
-      setTotalCount(filteredDefs.length);
+      setEntityDefs(result.entityDefs);
+      setTotalCount(result.totalCount);
     } catch (error) {
       console.error("Error fetching entity definitions:", error);
       setError(`Failed to fetch data: ${error instanceof Error ? error.message : String(error)}`);

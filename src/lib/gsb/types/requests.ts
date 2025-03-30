@@ -1,3 +1,14 @@
+export interface GetTokenRequest {
+    email: string;
+    password: string;
+    remember?: boolean;
+    includeUserInfo?: boolean;
+    variation?: {
+        tenantCode: string;
+    };
+}
+
+
 export class GsbSaveRequest {
     entDefName? = "";
     entDefId? = "";

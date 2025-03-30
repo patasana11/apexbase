@@ -29,13 +29,15 @@ import {
   FilterModel,
   EventApiModule,
   CheckboxEditorModule,
-  InfiniteRowModelModule
+  InfiniteRowModelModule,
+  CustomEditorModule
 } from 'ag-grid-community';
-import { GsbEntityDef } from '@/lib/gsb/models/gsb-entity-def.model';
+import { GsbEntityDef, GsbPropertyDef } from '@/lib/gsb/models/property-definition.model';
 import { GsbCacheService } from '@/lib/gsb/services/cache/gsb-cache.service';
 import { GsbEnum } from '@/lib/gsb/models/gsb-enum.model';
-import { PropertyDefinition } from '@/lib/gsb/models/property-definition.model';
 import { GsbUtils } from '@/lib/gsb/utils/gsb-utils';
+import { GridColumnConfig, GsbGridUtils } from '@/lib/gsb/utils/gsb-grid-utils';
+import BitwiseEnumEditor from './BitwiseEnumEditor';  // Import the custom editor
 
 // Import AG Grid styles - using only the new theme
 import 'ag-grid-community/styles/ag-grid.css';
@@ -60,7 +62,8 @@ ModuleRegistry.registerModules([
   PaginationModule,
   EventApiModule,
   CheckboxEditorModule,
-  InfiniteRowModelModule
+  InfiniteRowModelModule,
+  CustomEditorModule
 ]);
 
 interface GsbDataTableProps {
@@ -91,142 +94,21 @@ export function GsbDataTable({
   const [gridApi, setGridApi] = useState<GridApi | null>(null);
   const [columns, setColumns] = useState<Column[] | null>(null);
   const [entityDef, setEntityDef] = useState<GsbEntityDef | null>(null);
-  const [propertyDefs, setPropertyDefs] = useState<PropertyDefinition[]>([]);
+  const [propertyDefs, setPropertyDefs] = useState<GsbPropertyDef[]>([]);
   const [enumCache, setEnumCache] = useState<Map<string, GsbEnum>>(new Map());
   const [rowData, setRowData] = useState<any[]>([]);
-
-  // Get specific column configuration based on property type
-  const getColumnTypeConfig = (prop: PropertyDefinition): Partial<ColDef> => {
-    // Handle required fields
-    const baseConfig: Partial<ColDef> = {
-      editable: true,
-      sortable: true,
-      filter: true,
-      resizable: true,
-      floatingFilter: true,
-      minWidth: 100,
-      maxWidth: 300,
-      // Add validation for required fields
-      ...(prop.usage === 1 && {
-        cellClass: 'required-field',
-        cellStyle: { backgroundColor: '#fff3f3' }
-      })
-    };
-
-    // Handle enum fields
-    if (prop.enum_id) {
-      return {
-        ...baseConfig,
-        cellEditor: 'agSelectCellEditor',
-        cellEditorParams: {
-          values: [], // Will be populated from enum cache
-          cellRenderer: (params: ICellRendererParams) => {
-            const enumValue = enumCache.get(prop.enum_id!)?.values?.find(v => v.value === params.value);
-            return enumValue?.title || params.value;
-          }
-        }
-      };
-    }
-
-    // Handle reference fields
-    if (prop.refType) {
-      return {
-        ...baseConfig,
-        filter: 'agTextColumnFilter',
-        cellEditor: 'agSelectCellEditor',
-        cellRenderer: (params: ICellRendererParams) => {
-          if (!params.value) return '';
-          if (Array.isArray(params.value)) {
-            return params.value.map((ref: any) => ref.title).join(', ');
-          }
-          return params.value.title || params.value;
-        }
-      };
-    }
-
-    // Handle numeric fields
-    if (prop.dataType === 'DECIMAL' || prop.dataType === 'INT' || prop.dataType === 'LONG') {
-      return {
-        ...baseConfig,
-        filter: 'agNumberColumnFilter',
-        minWidth: 120,
-        maxWidth: 150,
-        valueFormatter: (params: ValueFormatterParams) => {
-          if (params.value) {
-            return Number(params.value).toLocaleString(undefined, {
-              minimumFractionDigits: prop.scale || 0,
-              maximumFractionDigits: prop.scale || 0
-            });
-          }
-          return '';
-        }
-      };
-    }
-
-    // Handle date fields
-    if (prop.dataType === 'DATETIME') {
-      return {
-        ...baseConfig,
-        filter: 'agDateFilter',
-        cellEditor: 'agDateCellEditor',
-        minWidth: 150,
-        maxWidth: 180,
-        valueFormatter: (params: ValueFormatterParams) => {
-          if (params.value) {
-            return new Date(params.value).toLocaleDateString();
-          }
-          return '';
-        }
-      };
-    }
-
-    // Handle text fields with max length
-    if (prop.dataType === 'STRING_UNICODE' || prop.dataType === 'STRING_ASCII') {
-      return {
-        ...baseConfig,
-        filter: 'agTextColumnFilter',
-        cellEditor: 'agTextCellEditor',
-        minWidth: 150,
-        maxWidth: 300,
-        cellEditorParams: {
-          maxLength: prop.maxLength
-        }
-      };
-    }
-
-    // Default to text column
-    return {
-      ...baseConfig,
-      filter: 'agTextColumnFilter'
-    };
-  };
+  const [columnDefs, setColumnDefs] = useState<GridColumnConfig[]>([]);
 
   // Configure column definitions
-  const columnDefs = useMemo(() => {
-    if (!propertyDefs.length) return [];
+  useEffect(() => {
+    if (!propertyDefs.length) return;
 
-    return propertyDefs
-      .sort((a, b) => (a.orderNumber || 0) - (b.orderNumber || 0))
-      .map(prop => ({
-        field: prop.name,
-        headerName: prop.title,
-        // Add tooltip for required fields
-        headerTooltip: prop.usage === 1 ? `${prop.title} (Required)` : prop.title,
-        // Add tooltip for fields with description
-        tooltipField: prop.name,
-        // Add tooltip for reference fields
-        ...(prop.refType && {
-          tooltipValueGetter: (params: any) => {
-            if (!params.value) return '';
-            if (Array.isArray(params.value)) {
-              return params.value.map((ref: any) => ref.title).join(', ');
-            }
-            return params.value.title || params.value;
-          }
-        }),
-        // Additional column configuration based on property type
-        ...getColumnTypeConfig(prop)
-      }));
+    const newColumnDefs = propertyDefs
+      .map(prop => GsbGridUtils.createColumnDef(prop, enumCache))
+      .filter(col => !col.isSystemColumn)
+      .sort((a, b) => (a.orderNumber || 0) - (b.orderNumber || 0));
+
+    setColumnDefs(newColumnDefs);
   }, [propertyDefs, enumCache]);
 
   // Load entity definition and properties
@@ -312,6 +194,9 @@ export function GsbDataTable({
     cacheBlockSize: pageSize,
     infiniteInitialRowCount: totalCount,
     maxConcurrentDatasourceRequests: 1,
+    components: {
+      BitwiseEnumEditor: BitwiseEnumEditor,
+    },
     defaultColDef: {
       sortable: true,
       filter: true,

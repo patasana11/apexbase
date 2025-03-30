@@ -69,6 +69,8 @@ export interface GsbEntityDef {
  * Represents a property of a GSB Entity Definition
  */
 export interface GsbProperty {
+  isMultiple: any;
+  isSystem: boolean;
   id: string;
   name: string;
   title: string;
@@ -97,12 +99,13 @@ export interface GsbProperty {
   createFormMode?: number;
   listScreens?: number;
   orderNumber?: number;
+  definition?: GsbPropertyDef;
 }
 
 /**
  * Represents a property definition in the GSB system
  */
-export interface PropertyDefinition {
+export interface GsbPropertyDef {
   id: string;
   dataType: DataType;
   title: string;

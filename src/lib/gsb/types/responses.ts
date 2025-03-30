@@ -1,3 +1,21 @@
+export interface AuthResponse {
+    auth: {
+        userTenant: any;
+        userToken: any;
+        userId: string;
+        token: string;
+        name: string;
+        email: string;
+        roles: string[];
+        groups: string[];
+        expireDate: string;
+        title: string;
+        opResult: boolean;
+    };
+    status: number;
+}
+
+
 export class GsbQueryResponse {
     message?: string | undefined;
     status?: number | undefined;
