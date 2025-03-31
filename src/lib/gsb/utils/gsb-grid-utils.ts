@@ -4,16 +4,16 @@ import { GsbEnum } from '../models/gsb-enum.model';
 
 export interface GridColumnConfig extends ColDef {
   context: {
-    propertyName: string;
-    dataType: DataType;
-    isSystemColumn: boolean;
-    isReference: boolean;
-    isEnum: boolean;
-    isRequired: boolean;
+    propertyName?: string;
+    dataType?: DataType;
+    isSystemColumn?: boolean;
+    isReference?: boolean;
+    isEnum?: boolean;
+    isRequired?: boolean;
     orderNumber?: number;
-    propertyDef: GsbPropertyDef;
-    isMultiple: boolean;
-    isSystem: boolean;
+    propertyDef?: GsbPropertyDef;
+    isMultiple?: boolean;
+    isSystem?: boolean;
   };
 }
 
@@ -26,7 +26,7 @@ export class GsbGridUtils {
   ];
 
   public static isSystemColumn(prop: GsbProperty): boolean {
-    return prop.isSystem || this.SYSTEM_COLUMNS.includes(prop.name);
+    return prop.isSystem || this.SYSTEM_COLUMNS.includes(prop.name || '');
   }
 
   public static createColumnDef(

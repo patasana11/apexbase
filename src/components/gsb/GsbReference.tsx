@@ -4,11 +4,12 @@ import { GsbEntityDef, GsbProperty } from '@/lib/gsb/models/gsb-entity-def.model
 import { GsbCacheService } from '@/lib/gsb/services/cache/gsb-cache.service';
 import { GsbEntityService } from '@/lib/gsb/services/entity/gsb-entity.service';
 import { getCurrentTenant } from '@/lib/gsb/config/tenant-config';
+import { QueryParams } from '@/lib/gsb/types/query-params';
 
 interface GsbReferenceProps {
     entity: any;
     onChange?: (value: string) => void;
-    parentEntityDefName: string;
+    parentEntityDef: GsbEntityDef;
     propName: string;
     placeholder?: string;
     className?: string;
@@ -18,7 +19,7 @@ interface GsbReferenceProps {
 export function GsbReference({
     entity,
     onChange,
-    parentEntityDefName,
+    parentEntityDef,
     propName,
     placeholder = 'Select reference...',
     className = '',
@@ -27,45 +28,33 @@ export function GsbReference({
     const [referenceEntityDef, setReferenceEntityDef] = useState<GsbEntityDef | null>(null);
     const [displayValue, setDisplayValue] = useState<string>('');
 
-    useEffect(() => {
-        const loadReferenceEntityDef = async () => {
-            try {
-                const cacheService = GsbCacheService.getInstance();
-                const { entityDef } = await cacheService.getEntityDefWithPropertiesByName(parentEntityDefName);
-                const property = entityDef.properties?.find(p => p.name === propName);
-                if (!property?.refEntDef_id) {
-                    throw new Error(`Property ${propName} not found or is not a reference`);
-                }
-                const { entityDef: refDef } = await cacheService.getEntityDefWithPropertiesByName(property.refEntDef_id);
-                setReferenceEntityDef(refDef);
-            } catch (error) {
-                console.error('Error loading reference entity definition:', error);
-            }
-        };
-
-        loadReferenceEntityDef();
-    }, [parentEntityDefName, propName]);
 
     useEffect(() => {
         const loadDisplayValue = async () => {
             if (!entity || !referenceEntityDef) return;
+            const refEnt = entity[propName ];
 
             try {
-                const entityService = GsbEntityService.getInstance();
-                const tenantCode = getCurrentTenant();
-                const displayField = referenceEntityDef.title || 'id';
-
-                let refEnt = entity[displayField];
-                if (!refEnt) {
-                    if (entity[displayField + "_id"]) {
-                        let refResp = await entityService.getById(referenceEntityDef.name, entity[displayField + "_id"]);
-                        if (refResp) {
-                            refEnt = refResp.entity;
+                if(!refEnt?.title  ){
+                    const entityService = GsbEntityService.getInstance();
+    
+                    if (!refEnt) {
+                        let id = refEnt?.id || entity[propName + "_id"];
+                        if (id) {
+                            let req = new QueryParams<any>(referenceEntityDef.name || '');
+                            req.entityId =id ;
+                            req.entityDef = referenceEntityDef;
+                            req.select('title');
+                            let refResp = await entityService.get(req);
+                            if (refResp) {
+                                refEnt.title = refResp.entity?.title;
+                            }
                         }
                     }
                 }
 
-                setDisplayValue(refEnt?.title || '');
+
+                setDisplayValue(refEnt);
 
                 //if no title just 
             } catch (error) {
@@ -93,7 +82,7 @@ export function GsbReference({
 
             await entityService.save(
                 {
-                    entityDef: { name: parentEntityDefName },
+                    entityDef: { name: parentEntityDef },
                     entity: upEntity
                 }
             );
@@ -106,14 +95,14 @@ export function GsbReference({
     };
 
     if (!referenceEntityDef) {
-        return <div className="text-gray-500">Loading reference...</div>;
+        return <div className="text-gray-500"></div>;
     }
 
     return (
         <GsbAutocomplete
             value={displayValue}
             onChange={handleSelect}
-            entityDefName={referenceEntityDef.name}
+            entityDef={referenceEntityDef}
             placeholder={placeholder}
             className={className}
             disabled={disabled}

@@ -52,12 +52,14 @@ export default function EntityDataPage({ params }: PageProps) {
         const dataTableService = GsbDataTableService.getInstance();
         const result = await dataTableService.queryEntities(
           resolvedParams.name,
-          page,
-          pageSize,
-          searchQuery,
-          sortField,
-          sortDirection,
-          filters
+          {
+            page,
+            pageSize,
+            searchQuery,
+            sortField,
+            sortDirection,
+            filters  
+          }
         );
 
         setData(result.data);

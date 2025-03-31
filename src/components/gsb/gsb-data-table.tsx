@@ -32,7 +32,7 @@ import {
   InfiniteRowModelModule,
   CustomEditorModule
 } from 'ag-grid-community';
-import { GsbEntityDef, GsbPropertyDef } from '@/lib/gsb/models/property-definition.model';
+import { GsbEntityDef, GsbProperty, GsbPropertyDef } from '@/lib/gsb/models/gsb-entity-def.model';
 import { GsbCacheService } from '@/lib/gsb/services/cache/gsb-cache.service';
 import { GsbEnum } from '@/lib/gsb/models/gsb-enum.model';
 import { GsbUtils } from '@/lib/gsb/utils/gsb-utils';
@@ -92,8 +92,8 @@ const ReferenceCellRenderer = (props: ICellRendererParams) => {
 
   return (
     <GsbReference
-      value={value}
-      parentEntityDefName={context.propertyDef.refEntDef_id}
+      entity={data}
+      parentEntityDef={context.propertyDef.refEntDef_id}
       propName={context.propertyDef.name}
       disabled={true}
     />
@@ -116,9 +116,9 @@ const ReferenceCellEditor = (props: any) => {
 
   return (
     <GsbReference
-      value={value}
+      entity={data}
       onChange={handleChange}
-      parentEntityDefName={context.propertyDef.refEntDef_id}
+      parentEntityDef={context.propertyDef.refEntDef_id}
       propName={context.propertyDef.name}
     />
   );
@@ -135,7 +135,7 @@ const MultiReferenceCellRenderer = (props: ICellRendererParams) => {
 
   return (
     <GsbMultiReference
-      values={value || []}
+      entity={data}
       parentEntityDefName={context.propertyDef.refEntDef_id}
       propName={context.propertyDef.name}
       disabled={true}
@@ -159,7 +159,7 @@ const MultiReferenceCellEditor = (props: any) => {
 
   return (
     <GsbMultiReference
-      values={value || []}
+      entity={data}
       onChange={handleChange}
       parentEntityDefName={context.propertyDef.refEntDef_id}
       propName={context.propertyDef.name}
@@ -182,7 +182,7 @@ export function GsbDataTable({
   const [gridApi, setGridApi] = useState<GridApi | null>(null);
   const [columns, setColumns] = useState<Column[] | null>(null);
   const [entityDef, setEntityDef] = useState<GsbEntityDef | null>(null);
-  const [propertyDefs, setPropertyDefs] = useState<GsbPropertyDef[]>([]);
+  const [propertyDefs, setPropertyDefs] = useState<GsbProperty[]>([]);
   const [enumCache, setEnumCache] = useState<Map<string, GsbEnum>>(new Map());
   const [rowData, setRowData] = useState<any[]>([]);
   const [columnDefs, setColumnDefs] = useState<GridColumnConfig[]>([]);
@@ -204,7 +204,7 @@ export function GsbDataTable({
     const loadEntityDef = async () => {
       try {
         const cacheService = GsbCacheService.getInstance();
-        const { entityDef, propertyDefs } = await cacheService.getEntityDefWithPropertiesByName(entityDefName);
+        const { entityDef, properties: propertyDefs } = await cacheService.getEntityDefWithPropertiesByName(entityDefName);
         setEntityDef(entityDef);
         setPropertyDefs(propertyDefs);
 

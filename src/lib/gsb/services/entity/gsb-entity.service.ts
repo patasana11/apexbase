@@ -51,15 +51,7 @@ export class GsbEntityService {
 
     async getById<T extends object>(definitionType: (new () => T) | string, id: string, token?: string, tenantCode?: string): Promise<GsbQueryResponse | null> {
         console.log(`Getting entity by ID: ${id}, definition type: ${typeof definitionType === 'string' ? definitionType : 'constructor'}`);
-        const req = new GsbSaveRequest();
-        if (typeof definitionType === 'string') {
-            req.entDefName = definitionType;
-        } else {
-            const instance = new definitionType();
-            if ('_entDefName' in instance) {
-                req.entDefName = (instance as any)._entDefName;
-            }
-        }
+        const req = new  QueryParams<any>(definitionType);
         req.entityId = id;
         const result = await this.get(req, token, tenantCode);
         return result.entity as T;

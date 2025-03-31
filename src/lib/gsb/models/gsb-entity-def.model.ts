@@ -47,8 +47,8 @@ export enum DataType {
  * Represents a GSB Entity Definition
  */
 export interface GsbEntityDef {
-  id: string;
-  name: string;
+  id?: string;
+  name?: string;
   title?: string;
   description?: string;
   dbTableName?: string;
@@ -69,13 +69,13 @@ export interface GsbEntityDef {
  * Represents a property of a GSB Entity Definition
  */
 export interface GsbProperty {
-  isMultiple: any;
-  isSystem: boolean;
-  id: string;
-  name: string;
-  title: string;
+  isMultiple?: any;
+  isSystem?: boolean;
+  id?: string;
+  name?: string;
+  title?: string;
   description?: string;
-  definition_id: string;
+  definition_id?: string;
   isRequired?: boolean;
   isIndexed?: boolean;
   isPrimaryKey?: boolean;

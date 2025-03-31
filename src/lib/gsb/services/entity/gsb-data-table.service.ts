@@ -76,7 +76,6 @@ export class GsbDataTableService {
       }
 
       // Get auth params
-      const { token, tenantCode } = await this.cacheService.getAuthParams();
 
       // Create query parameters
       const queryParams = new QueryParams(entityDefName);
@@ -110,7 +109,7 @@ export class GsbDataTableService {
       }
 
       // Execute query
-      const response = await this.entityService.query(queryParams, token, tenantCode);
+      const response = await this.entityService.query(queryParams);
 
       return {
         data: response.entities || [],

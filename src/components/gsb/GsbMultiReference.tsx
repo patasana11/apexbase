@@ -108,6 +108,7 @@ export function GsbMultiReference({
         }
       );
 
+      let values = entity[propName] || [];
       const newValues = [...values, selectedValue];
       onChange?.(newValues);
     } catch (error) {
@@ -132,8 +133,9 @@ export function GsbMultiReference({
             propName: propName
         }
     );
+    let values = entity[propName] ;
       
-      const newValues = values.filter(v => v !== id);
+      const newValues = values.filter((v: any) => v.id !== id);
       onChange?.(newValues);
     } catch (error) {
       console.error('Error removing mapped item:', error);
@@ -145,7 +147,7 @@ export function GsbMultiReference({
   };
 
   if (!referenceEntityDef) {
-    return <div className="text-gray-500">Loading reference...</div>;
+    return <div className="text-gray-500"></div>;
   }
 
   return (
@@ -153,14 +155,14 @@ export function GsbMultiReference({
       <GsbAutocomplete
         value=""
         onChange={handleSelect}
-        entityDefName={referenceEntityDef.name}
+        entityDef={referenceEntityDef}
         placeholder={placeholder}
         disabled={disabled}
       />
       
       <div className="space-y-2">
         {isLoading ? (
-          <div className="text-gray-500">Loading references...</div>
+          <div className="text-gray-500"></div>
         ) : (
           <>
             {displayValues.map(({ id, display }) => (

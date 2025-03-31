@@ -5,7 +5,6 @@ import { getGsbToken, getGsbTenantCode, setGsbTenantCode } from '../../config/gs
 import { EntityQueryParams } from '../../types/query-params';
 import { QueryFunction, QueryType } from '../../types/query';
 import { getCurrentTenant } from '../../config/tenant-config';
-import { GsbEntity } from '../gsb-entity.service';
 
 interface CacheEntry<T> {
     data: T;
@@ -40,7 +39,7 @@ export class GsbCacheService {
         return GsbCacheService.instance;
     }
 
-    private async getAuthParams(): Promise<{ token: string; tenantCode: string }> {
+    public async getAuthParams(): Promise<{ token: string; tenantCode: string }> {
         const token = await getGsbToken();
         const tenantCode = getGsbTenantCode();
         return { token, tenantCode };
@@ -73,12 +72,36 @@ export class GsbCacheService {
         return propertyDefResponse.entities;
     }
 
-    public async getEntityDefWithPropertiesByName(name: string): Promise<{ entityDef: GsbEntityDef; propertyDefs: GsbPropertyDef[] }> {
+    public async getEntityDefWithPropertiesByName(name: string): 
+    Promise<{ entityDef: GsbEntityDef; properties: GsbProperty[] }> {
+        return this.getEntityDefWithProperties({name: name});
+    }
+
+
+    public async getEntityDefWithProperties(def: GsbEntityDef): 
+    Promise<{ entityDef: GsbEntityDef; properties: GsbProperty[] }> {
         try {
+            if(!def) {
+                throw new Error('Entity definition name is required');
+            }
+            let cached;
+
+
             // Check cache first
-            const cached = this.entityDefCache.get(name);
+            if(def.name) {
+                cached = this.entityDefCache.get(def.name);
+            }
+            else if(def.id) {
+                cached = this.entityDefCache.values().find(entry => entry.data.id === def.id);
+            }
+            else {
+                throw new Error('Entity definition name or id is required');
+            }
+
+            def = {id: def.id, name: def.name};
+
             if (cached && Date.now() - cached.timestamp < this.CACHE_DURATION) {
-                return { entityDef: cached.data, propertyDefs: cached.data.properties || [] };
+                return { entityDef: cached.data, properties: cached.data.properties || [] };
             }
 
             // Get auth params
@@ -86,7 +109,7 @@ export class GsbCacheService {
 
             // Fetch entity definition
             const entityDefResponse = await this.entityService.getDefinition({
-                entityDef: { name }
+                entityDef: def
             }, token, tenantCode);
 
             if (!entityDefResponse?.entityDef) {
@@ -111,47 +134,16 @@ export class GsbCacheService {
             }
 
             // Cache the updated entity definition
-            this.entityDefCache.set(name, {
+            this.entityDefCache.set(entityDef.name || '', {
                 data: entityDef,
                 timestamp: Date.now()
             });
 
-            return { entityDef, propertyDefs: entityDef.properties || [] };
+            return { entityDef, properties: entityDef.properties || [] };
         } catch (error) {
             console.error('Error fetching entity definition:', error);
             throw error;
         }
-    }
-
-    public async getEntityById(entityDefId: string, entityId: string): Promise<any> {
-        const cacheKey = `${entityDefId}:${entityId}`;
-        
-        // Check cache first
-        const cached = this.entityCache.get(cacheKey);
-        if (cached && Date.now() - cached.timestamp < this.CACHE_DURATION) {
-            return cached.data;
-        }
-
-        // Get auth params
-        const { token, tenantCode } = await this.getAuthParams();
-
-        // Fetch from API if not in cache
-        const entity = await this.entityService.getEntity({
-            entityDef: { id: entityDefId },
-            entity: { id: entityId }
-        }, token, tenantCode);
-
-        if (!entity) {
-            throw new Error('Entity not found');
-        }
-
-        // Cache the entity
-        this.entityCache.set(cacheKey, {
-            data: entity,
-            timestamp: Date.now()
-        });
-
-        return entity;
     }
 
     public async getEnum(id: string): Promise<GsbEnum | null> {

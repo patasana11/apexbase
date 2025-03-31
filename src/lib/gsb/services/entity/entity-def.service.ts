@@ -35,7 +35,7 @@ export class EntityDefService {
         getGsbTenantCode()
       );
       console.log('Entity definition result:', entityDef);
-      return entityDef;
+      return entityDef?.entity || null;
     } catch (error) {
       console.error('Error getting entity definition by ID:', error);
       return null;

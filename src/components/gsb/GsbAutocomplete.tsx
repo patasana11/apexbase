@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { GsbEntityDef } from '@/lib/gsb/models/property-definition.model';
+import { GsbEntityDef } from '@/lib/gsb/models/gsb-entity-def.model';
 import { GsbCacheService } from '@/lib/gsb/services/cache/gsb-cache.service';
-import { GsbEntityService } from '@/lib/gsb/services/gsb-entity.service';
+import { GsbEntityService } from '@/lib/gsb/services/entity/gsb-entity.service';
 import { getCurrentTenant } from '@/lib/gsb/config/tenant-config';
+import { QueryParams } from '@/lib/gsb/types/query-params';
 
 interface GsbAutocompleteProps {
   value: string;
-  onChange: (value: string) => void;
-  entityDefName: string;
+  onChange: (value: any) => void;
+  entityDef: GsbEntityDef;
   placeholder?: string;
   className?: string;
   disabled?: boolean;
@@ -16,31 +17,18 @@ interface GsbAutocompleteProps {
 export function GsbAutocomplete({
   value,
   onChange,
-  entityDefName,
+  entityDef,
   placeholder = 'Search...',
   className = '',
   disabled = false
 }: GsbAutocompleteProps) {
-  const [entityDef, setEntityDef] = useState<GsbEntityDef | null>(null);
   const [searchText, setSearchText] = useState('');
   const [suggestions, setSuggestions] = useState<Array<{ id: string; display: string }>>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const loadEntityDef = async () => {
-      try {
-        const cacheService = GsbCacheService.getInstance();
-        const { entityDef } = await cacheService.getEntityDefWithPropertiesByName(entityDefName);
-        setEntityDef(entityDef);
-      } catch (error) {
-        console.error('Error loading entity definition:', error);
-      }
-    };
 
-    loadEntityDef();
-  }, [entityDefName]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -60,21 +48,20 @@ export function GsbAutocomplete({
       setIsLoading(true);
       try {
         const entityService = GsbEntityService.getInstance();
-        const displayField = entityDef.display_field || 'id';
+        const displayField =  'title';
         const tenantCode = getCurrentTenant();
         
-        const searchResults = await entityService.searchEntities(
-          entityDef.id!,
-          searchText,
-          displayField,
-          '', // Token will be handled by the service
-          tenantCode
-        );
+        const req = new QueryParams<any>(entityDef.name || '');
+        req.entityDef = entityDef;
+        req.filter = searchText;
+        req.count = 10;
+        req.select(displayField).select('id');
+        const searchResults = await entityService.query(req);
 
-        setSuggestions(searchResults.map((entity: any) => ({
+        setSuggestions(searchResults.entities?.map((entity: any) => ({
           id: entity.id,
           display: entity[displayField] || entity.id || ''
-        })));
+        })) || []);
       } catch (error) {
         console.error('Error searching entities:', error);
       } finally {
@@ -93,7 +80,7 @@ export function GsbAutocomplete({
 
   const handleSelect = (suggestion: { id: string; display: string }) => {
     setSearchText(suggestion.display);
-    onChange(suggestion.id);
+    onChange(suggestion);
     setIsOpen(false);
   };
 
