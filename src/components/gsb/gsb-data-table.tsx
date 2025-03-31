@@ -40,6 +40,7 @@ import { GridColumnConfig, GridColumnConfigContext, GsbGridUtils } from '@/lib/g
 import BitwiseEnumEditor from './BitwiseEnumEditor';  // Import the custom editor
 import { GsbReference } from './GsbReference';
 import { GsbMultiReference } from './GsbMultiReference';
+import { ColumnManagementBar } from './column-management-bar';
 
 // Import AG Grid styles - using only the new theme
 import 'ag-grid-community/styles/ag-grid.css';
@@ -103,7 +104,6 @@ const ReferenceCellEditor = forwardRef((props: any, ref) => {
       entity={data}
       onChange={handleChange}
       parentEntityDef={context.entityDef}
-      property={context.property}
       propName={context.property?.name || ''}
     />
   );
@@ -155,6 +155,12 @@ export function GsbDataTable({
   const [enumCache, setEnumCache] = useState<Map<string, GsbEnum>>(new Map());
   const [rowData, setRowData] = useState<any[]>([]);
   const [columnDefs, setColumnDefs] = useState<GridColumnConfig[]>([]);
+  const [columnConfigs, setColumnConfigs] = useState<Array<{
+    property: GsbProperty;
+    visible: boolean;
+    sortable: boolean;
+    filterable: boolean;
+  }>>([]);
 
   // Configure column definitions
   useEffect(() => {
@@ -166,6 +172,17 @@ export function GsbDataTable({
       .sort((a, b) => (a.context.orderNumber || 0) - (b.context.orderNumber || 0));
 
     setColumnDefs(newColumnDefs);
+
+    // Initialize column configs
+    const initialConfigs = propertyDefs
+      .filter(prop => !GsbGridUtils.isSystemColumn(prop))
+      .map(prop => ({
+        property: prop,
+        visible: true,
+        sortable: true,
+        filterable: true
+      }));
+    setColumnConfigs(initialConfigs);
   }, [ entityDef, propertyDefs, enumCache]);
 
   // Load entity definition and properties
@@ -209,6 +226,34 @@ export function GsbDataTable({
   useEffect(() => {
     setRowData(data);
   }, [data]);
+
+  // Handle column changes from ColumnManagementBar
+  const handleColumnChange = (newConfigs: Array<{
+    property: GsbProperty;
+    visible: boolean;
+    sortable: boolean;
+    filterable: boolean;
+  }>) => {
+    setColumnConfigs(newConfigs);
+    
+    // Update grid columns
+    if (gridApi) {
+      const updatedColumnDefs = columnDefs.map(colDef => {
+        const config = newConfigs.find(c => c.property.name === colDef.field);
+        if (config) {
+          return {
+            ...colDef,
+            hide: !config.visible,
+            sortable: config.sortable,
+            filter: config.filterable
+          };
+        }
+        return colDef;
+      });
+      
+      setColumnDefs(updatedColumnDefs);
+    }
+  };
 
   // Grid ready event handler
   const onGridReady = (params: GridReadyEvent) => {
@@ -278,6 +323,10 @@ export function GsbDataTable({
 
   return (
     <div className="flex flex-col h-full w-full">
+      <ColumnManagementBar
+        columns={columnConfigs}
+        onColumnChange={handleColumnChange}
+      />
       <div className="ag-theme-alpine flex-grow w-full overflow-auto" style={{ height: 'calc(100vh - 200px)' }}>
         <AgGridReact
           {...gridOptions}
