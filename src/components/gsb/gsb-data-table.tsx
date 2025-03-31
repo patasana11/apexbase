@@ -36,7 +36,7 @@ import { GsbEntityDef, GsbProperty, GsbPropertyDef } from '@/lib/gsb/models/gsb-
 import { GsbCacheService } from '@/lib/gsb/services/cache/gsb-cache.service';
 import { GsbEnum } from '@/lib/gsb/models/gsb-enum.model';
 import { GsbUtils } from '@/lib/gsb/utils/gsb-utils';
-import { GridColumnConfig, GsbGridUtils } from '@/lib/gsb/utils/gsb-grid-utils';
+import { GridColumnConfig, GridColumnConfigContext, GsbGridUtils } from '@/lib/gsb/utils/gsb-grid-utils';
 import BitwiseEnumEditor from './BitwiseEnumEditor';  // Import the custom editor
 import { GsbReference } from './GsbReference';
 import { GsbMultiReference } from './GsbMultiReference';
@@ -85,10 +85,15 @@ interface GsbDataTableProps {
 // Custom cell editor for reference fields
 const ReferenceCellEditor = forwardRef((props: any, ref) => {
   const { value, data, colDef, stopEditing } = props;
-  const context = (colDef as any).context;
+  const context : GridColumnConfigContext = (colDef as any).context;
 
+  if (!context?.entityDef || !context?.propertyDef) {
+    console.error('Missing required context for ReferenceCellEditor');
+    return null;
+  }
 
-  const handleChange = (newValue: string) => {
+  const handleChange = (newValue: any) => {
+    if (!newValue) return;
     props.setValue(newValue);
     stopEditing();
   }
@@ -98,9 +103,10 @@ const ReferenceCellEditor = forwardRef((props: any, ref) => {
       entity={data}
       onChange={handleChange}
       parentEntityDef={context.entityDef}
-      propName={context.propertyDef.name}
+      property={context.property}
+      propName={context.property?.name || ''}
     />
-	);
+  );
 });
 
 // Custom cell editor for multi-reference fields
@@ -108,8 +114,13 @@ const MultiReferenceCellEditor = forwardRef((props: any, ref) => {
   const { value, data, colDef, stopEditing } = props;
   const context = (colDef as any).context;
 
+  if (!context?.entityDef || !context?.propertyDef) {
+    console.error('Missing required context for MultiReferenceCellEditor');
+    return null;
+  }
 
-  const handleChange = (newValues: string[]) => {
+  const handleChange = (newValues: any[]) => {
+    if (!newValues) return;
     props.setValue(newValues);
     stopEditing();
   };
@@ -118,8 +129,9 @@ const MultiReferenceCellEditor = forwardRef((props: any, ref) => {
     <GsbMultiReference
       entity={data}
       onChange={handleChange}
-      parentEntityDef={{ id: context.propertyDef.refEntDef_id}}
-      propName={context.propertyDef.name}
+      parentEntityDef={context.entityDef}
+      propName={context.property.name}
+      property={context.property}
     />
   );
 });

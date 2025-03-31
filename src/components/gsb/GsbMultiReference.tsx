@@ -7,6 +7,7 @@ import { GsbPagination } from './GsbPagination';
 import { getCurrentTenant } from '@/lib/gsb/config/tenant-config';
 import { QueryParams } from '@/lib/gsb/types/query-params';
 import { DataTableQueryOptions } from '@/lib/gsb/services/entity/gsb-data-table.service';
+import { property } from 'lodash';
 
 interface GsbMultiReferenceProps {
   entity?: any;
@@ -17,6 +18,7 @@ interface GsbMultiReferenceProps {
   disabled?: boolean;
   pageSize?: number;
   parentEntityDef: GsbEntityDef;
+  property: GsbProperty;
   tableOptions?: DataTableQueryOptions
 }
 
@@ -28,68 +30,116 @@ export function GsbMultiReference({
   placeholder = 'Select references...',
   className = '',
   disabled = false,
+  property,
   tableOptions = {pageSize:10}
 }: GsbMultiReferenceProps) {
-  const [displayValues, setDisplayValues] = useState<Array<{ id: string; display: string }>>([]);
+  const [displayValues, setDisplayValues] = useState<Array<{ id: string; title: string }>>();
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [referenceEntityDef, setReferenceEntityDef] = useState<GsbEntityDef | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
+  // Initial load of reference entity definition
   useEffect(() => {
-    const loadDisplayValues = async () => {
-      if (!parentEntityDef) return;
+    const loadReferenceEntityDef = async () => {
+      try {
+        if (!parentEntityDef?.properties) {
+          setError('Invalid parent entity definition');
+          return;
+        }
+
+        if (!property?.refEntDef_id) {
+          setError('Reference entity definition ID not found');
+          return;
+        }
+
+        const cacheService = GsbCacheService.getInstance();
+        const { entityDef } = await cacheService.getEntityDefWithProperties({
+          id: property.refEntDef_id,
+          name: '',
+          properties: []
+        });
+        if (!entityDef) {
+          setError('Reference entity definition not found');
+          return;
+        }
+
+        setReferenceEntityDef(entityDef);
+      } catch (error) {
+        console.error('Error loading reference entity definition:', error);
+        setError('Failed to load reference entity definition');
+      }
+    };
+
+    loadReferenceEntityDef();
+  }, [parentEntityDef, property]); // Only run when parentEntityDef or property changes
+
+  // Initial load of display values
+  useEffect(() => {
+    const loadInitialValues = async () => {
+      if (!entity || !referenceEntityDef) return;
 
       setIsLoading(true);
       try {
-        const entityService = GsbEntityService.getInstance();
-        const tenantCode = getCurrentTenant();
-        const displayField = 'title';
-        
-        // Get items for current page
-        const startIndex = (currentPage - 1) * (tableOptions.pageSize || 10);
-        const endIndex = startIndex + (tableOptions.pageSize || 10);
-        let values = entity[propName] ;
-
-        if(!values){
-            const req = new QueryParams<any>(parentEntityDef.name || '');
-            req.entityDef = parentEntityDef;
-            req.propertyName = propName;
-            req.startIndex = startIndex;
-            req.count = tableOptions.pageSize;
-            req.select(displayField).select('id');
-            const resp = await entityService.queryMapped(req);
-            values = resp.entities;
+        // If we have values in the entity, use those
+        if (entity[propName]?.length) {
+          setDisplayValues(entity[propName]);
+          setTotalPages(Math.ceil(entity[propName].length / (tableOptions.pageSize || 10)));
+          return;
         }
-        
 
-        setDisplayValues(values);
-            setTotalPages(Math.ceil(values.length / (tableOptions.pageSize || 10)   ));
+        // Otherwise, load from server
+        const entityService = GsbEntityService.getInstance();
+        const req = new QueryParams<any>(referenceEntityDef.name || '');
+        req.entityDef = parentEntityDef;
+        req.propertyName = propName;
+        req.startIndex = 0;
+        req.count = tableOptions.pageSize;
+        req.entityId = entity.id;
+        req.select('title').select('id');
+        const resp = await entityService.queryMapped(req);
+        if (resp.entities) {
+          setDisplayValues(resp.entities);
+          setTotalPages(Math.ceil(resp.entities.length / (tableOptions.pageSize || 10)));
+        }
       } catch (error) {
         console.error('Error loading reference display values:', error);
+        setError('Failed to load reference values');
       } finally {
         setIsLoading(false);
       }
     };
 
-    loadDisplayValues();
-  }, [parentEntityDef, entity, currentPage, tableOptions]);
+    loadInitialValues();
+  }, [entity, referenceEntityDef, propName]); // Only run when these core dependencies change
 
-
+  // Handle pagination updates
   useEffect(() => {
-    const loadReferenceEntityDef = async () => {
-      let referenceEntityDefId = parentEntityDef.properties?.find(p => p.name === propName)?.refEntDef_id;
-      let referenceEntityDef = await GsbCacheService.getInstance().getEntityDefWithProperties({id:referenceEntityDefId});
-      setReferenceEntityDef(referenceEntityDef);
-    }
-    loadReferenceEntityDef();
-  }, [parentEntityDef]);
+    const loadPageValues = async () => {
+      if (!entity || !referenceEntityDef || !entity[propName]?.length) return;
+
+      setIsLoading(true);
+      try {
+        const startIndex = (currentPage - 1) * (tableOptions.pageSize || 10);
+        const endIndex = startIndex + (tableOptions.pageSize || 10);
+        const pageValues = entity[propName].slice(startIndex, endIndex);
+        setDisplayValues(pageValues);
+      } catch (error) {
+        console.error('Error loading page values:', error);
+        setError('Failed to load page values');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadPageValues();
+  }, [currentPage, entity, propName, tableOptions.pageSize]); // Only run when pagination changes
 
   const handleSelect = async (selectedValue: any) => {
     if (!selectedValue || !parentEntityDef) return;
     
     const entityService = GsbEntityService.getInstance();
-    const tenantCode = getCurrentTenant();
     
     try {
       await entityService.saveMappedItems(
@@ -137,28 +187,35 @@ export function GsbMultiReference({
     setCurrentPage(page);
   };
 
+  if (error) {
+    return <div className="text-red-500">{error}</div>;
+  }
+
+  if (!referenceEntityDef) {
+    return <div className="text-gray-500">Loading...</div>;
+  }
+
   return (
     <div className={`space-y-4 ${className}`}>
-        <h1>Multi Reference</h1>
       <GsbAutocomplete
         value=""
         onChange={handleSelect}
-        entityDef={referenceEntityDef || {}}
+        entityDef={referenceEntityDef}
         placeholder={placeholder}
         disabled={disabled}
       />
       
       <div className="space-y-2">
         {isLoading ? (
-          <div className="text-gray-500"></div>
+          <div className="text-gray-500">Loading...</div>
         ) : (
           <>
-            {displayValues.map(({ id, display }) => (
+            {displayValues?.map(({ id, title }) => (
               <div
                 key={id}
                 className="flex items-center justify-between p-2 bg-gray-50 rounded"
               >
-                <span>{display}</span>
+                <span>{title}</span>
                 <button
                   onClick={() => handleRemove(id)}
                   disabled={disabled}
@@ -169,7 +226,7 @@ export function GsbMultiReference({
               </div>
             ))}
             
-            {displayValues.length > 0 && (
+            {displayValues?.length && (
               <GsbPagination
                 currentPage={currentPage}
                 totalPages={totalPages}

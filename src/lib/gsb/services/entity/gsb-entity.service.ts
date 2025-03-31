@@ -27,6 +27,15 @@ export class GsbEntityService {
         return serviceInstance;
     }
 
+    reduceEntityDef(request :any){
+        if(request.entityDef){
+            request.entityDef = {
+                id: request.entityDef.id,
+                name: request.entityDef.name,
+            }
+        }
+    }
+
     async getToken(request: GetTokenRequest): Promise<AuthResponse> {
         console.log('Getting token from AUTH_URL:', `${GSB_CONFIG.AUTH_URL}/api/auth/getToken`);
         
@@ -66,6 +75,7 @@ export class GsbEntityService {
     }
 
     async get(req: QueryParams<any>, token?: string, tenantCode?: string): Promise<GsbQueryResponse> {
+        this.reduceEntityDef(req);
         req.disableTransaction = true;
         console.log(`Getting entity, definition: ${req.entDefName}, id: ${req.entityId}`);
         try {
@@ -83,6 +93,7 @@ export class GsbEntityService {
     }
 
     async query(req: QueryParams<any>, token?: string, tenantCode?: string): Promise<GsbQueryResponse> {
+        this.reduceEntityDef(req);
         console.log(`Querying entities, definition: ${req.entDefName}`);
         req.disableTransaction = true;
         try {
@@ -100,6 +111,8 @@ export class GsbEntityService {
     }
 
     async queryMapped(req: QueryParams<any>, token?: string, tenantCode?: string): Promise<GsbQueryResponse> {
+        this.reduceEntityDef(req);
+        req.disableTransaction = true;
         const response = await this.apiService.callApi({
             method: 'POST',
             protocol: 'https',
@@ -119,6 +132,7 @@ export class GsbEntityService {
     }
 
     async save(req: GsbSaveRequest, token?: string, tenantCode?: string): Promise<GsbSaveResponse> {
+        this.reduceEntityDef(req);
         const response = await this.apiService.callApi({
             method: 'POST',
             protocol: 'https',
@@ -129,6 +143,7 @@ export class GsbEntityService {
     }
 
     async updateQuery(req: QueryParams<any>, token?: string, tenantCode?: string): Promise<GsbQueryOpResponse> {
+        this.reduceEntityDef(req);
         const response = await this.apiService.callApi({
             method: 'POST',
             protocol: 'https',
@@ -139,6 +154,7 @@ export class GsbEntityService {
     }
 
     async saveMulti(req: GsbSaveMultiRequest, token?: string, tenantCode?: string): Promise<GsbSaveMultiResponse> {
+        this.reduceEntityDef(req);
         const response = await this.apiService.callApi({
             method: 'POST',
             protocol: 'https',
@@ -159,6 +175,7 @@ export class GsbEntityService {
     }
 
     async saveMappedItems(req: GsbSaveMappedRequest, token?: string, tenantCode?: string): Promise<GsbSaveResponse> {
+        this.reduceEntityDef(req);
         const response = await this.apiService.callApi({
             method: 'POST',
             protocol: 'https',
@@ -169,6 +186,7 @@ export class GsbEntityService {
     }
 
     async removeMappedItems(req: GsbSaveMappedRequest, token?: string, tenantCode?: string): Promise<GsbQueryOpResponse> {
+        this.reduceEntityDef(req);
         const response = await this.apiService.callApi({
             method: 'POST',
             protocol: 'https',
@@ -178,7 +196,8 @@ export class GsbEntityService {
         return response as GsbQueryOpResponse;
     }
 
-    async getDefinition(req: { entityDef: { id?: string; name?: string } }, token?: string, tenantCode?: string): Promise<GsbDefinitionResponse> {
+        async getDefinition(req: { entityDef: { id?: string; name?: string } }, token?: string, tenantCode?: string): Promise<GsbDefinitionResponse> {
+        this.reduceEntityDef(req);
         console.log(`Getting entity definition, id: ${req.entityDef.id}, name: ${req.entityDef.name}`);
         try {
             const response = await this.apiService.callApi({
@@ -195,6 +214,7 @@ export class GsbEntityService {
     }
 
     async delete(req: GsbSaveRequest, token?: string, tenantCode?: string): Promise<GsbQueryOpResponse> {
+        this.reduceEntityDef(req);
         const response = await this.apiService.callApi({
             method: 'POST',
             protocol: 'https',
@@ -205,6 +225,7 @@ export class GsbEntityService {
     }
 
     async deleteQuery(req: QueryParams<any>, token?: string, tenantCode?: string): Promise<GsbQueryOpResponse> {
+        this.reduceEntityDef(req);
         const response = await this.apiService.callApi({
             method: 'POST',
             protocol: 'https',

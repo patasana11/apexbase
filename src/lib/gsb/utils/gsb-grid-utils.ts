@@ -2,22 +2,23 @@ import { ColDef } from 'ag-grid-community';
 import { GsbProperty, GsbPropertyDef, DataType, RefType, GsbEntityDef } from '../models/gsb-entity-def.model';
 import { GsbEnum } from '../models/gsb-enum.model';
 
-export interface GridColumnConfig extends ColDef {
-  context: {
-    property?: GsbProperty;
-    propertyDef?: GsbPropertyDef;
-    entityDef?: GsbEntityDef;
+export interface GridColumnConfigContext {
+  property?: GsbProperty;
+  propertyDef?: GsbPropertyDef;
+  entityDef?: GsbEntityDef;
+  propertyName?: string;    
+  dataType?: DataType;
+  isSystemColumn?: boolean;
+  isReference?: boolean;
+  isEnum?: boolean;
+  isRequired?: boolean;
+  orderNumber?: number; 
+  isMultiple?: boolean;
+  isSystem?: boolean;
+}
 
-    propertyName?: string;
-    dataType?: DataType;
-    isSystemColumn?: boolean;
-    isReference?: boolean;
-    isEnum?: boolean;
-    isRequired?: boolean;
-    orderNumber?: number;
-    isMultiple?: boolean;
-    isSystem?: boolean;
-  };
+export interface GridColumnConfig extends ColDef {
+    context: GridColumnConfigContext;
 }
 
 export class GsbGridUtils {
@@ -140,7 +141,8 @@ export class GsbGridUtils {
           ...baseConfig.context,
           isReference: true,
           isMultiple: false,
-          property: propDef,
+          property: prop,
+          propertyDef: propDef,
           entityDef: entityDef
         },
         valueFormatter: (params: any) => {
@@ -159,7 +161,9 @@ export class GsbGridUtils {
           ...baseConfig.context,
           isReference: true,
           isMultiple: true,
-          property: propDef
+          property: prop,
+          propertyDef: propDef,
+          entityDef: entityDef
         },
         valueFormatter: (params: any) => {
           return params.value ? params.value.map((v: any) => v.title).join(', ') : '';
