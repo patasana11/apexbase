@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, forwardRef } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { 
   GridOptions, 
@@ -81,76 +81,33 @@ interface GsbDataTableProps {
   onFilterChange?: (filters: Record<string, any>) => void;
 }
 
-// Custom cell renderer for reference fields
-const ReferenceCellRenderer = (props: ICellRendererParams) => {
-  const { value, data, colDef } = props;
-  const context = (colDef as any).context;
-
-  if (!context?.isReference) {
-    return <span>{value}</span>;
-  }
-
-  return (
-    <GsbReference
-      entity={data}
-      parentEntityDef={context.propertyDef.refEntDef_id}
-      propName={context.propertyDef.name}
-      disabled={true}
-    />
-  );
-};
 
 // Custom cell editor for reference fields
-const ReferenceCellEditor = (props: any) => {
+const ReferenceCellEditor = forwardRef((props: any, ref) => {
   const { value, data, colDef, stopEditing } = props;
   const context = (colDef as any).context;
 
-  if (!context?.isReference) {
-    return null;
-  }
 
   const handleChange = (newValue: string) => {
     props.setValue(newValue);
     stopEditing();
-  };
+  }
 
   return (
     <GsbReference
       entity={data}
       onChange={handleChange}
-      parentEntityDef={context.propertyDef.refEntDef_id}
+      parentEntityDef={context.entityDef}
       propName={context.propertyDef.name}
     />
-  );
-};
-
-// Custom cell renderer for multi-reference fields
-const MultiReferenceCellRenderer = (props: ICellRendererParams) => {
-  const { value, data, colDef } = props;
-  const context = (colDef as any).context;
-
-  if (!context?.isReference || !context.isMultiple) {
-    return <span>{value}</span>;
-  }
-
-  return (
-    <GsbMultiReference
-      entity={data}
-      parentEntityDefName={context.propertyDef.refEntDef_id}
-      propName={context.propertyDef.name}
-      disabled={true}
-    />
-  );
-};
+	);
+});
 
 // Custom cell editor for multi-reference fields
-const MultiReferenceCellEditor = (props: any) => {
+const MultiReferenceCellEditor = forwardRef((props: any, ref) => {
   const { value, data, colDef, stopEditing } = props;
   const context = (colDef as any).context;
 
-  if (!context?.isReference || !context.isMultiple) {
-    return null;
-  }
 
   const handleChange = (newValues: string[]) => {
     props.setValue(newValues);
@@ -161,11 +118,11 @@ const MultiReferenceCellEditor = (props: any) => {
     <GsbMultiReference
       entity={data}
       onChange={handleChange}
-      parentEntityDefName={context.propertyDef.refEntDef_id}
+      parentEntityDef={{ id: context.propertyDef.refEntDef_id}}
       propName={context.propertyDef.name}
     />
   );
-};
+});
 
 export function GsbDataTable({ 
   entityDefName, 
@@ -192,12 +149,12 @@ export function GsbDataTable({
     if (!propertyDefs.length) return;
 
     const newColumnDefs = propertyDefs
-      .map(prop => GsbGridUtils.createColumnDef(prop, enumCache))
+      .map(prop => GsbGridUtils.createColumnDef(prop,entityDef || {}, enumCache))
       .filter(col => !col.context.isSystemColumn)
       .sort((a, b) => (a.context.orderNumber || 0) - (b.context.orderNumber || 0));
 
     setColumnDefs(newColumnDefs);
-  }, [propertyDefs, enumCache]);
+  }, [ entityDef, propertyDefs, enumCache]);
 
   // Load entity definition and properties
   useEffect(() => {
@@ -284,9 +241,7 @@ export function GsbDataTable({
     maxConcurrentDatasourceRequests: 1,
     components: {
       BitwiseEnumEditor,
-      ReferenceCellRenderer,
       ReferenceCellEditor,
-      MultiReferenceCellRenderer,
       MultiReferenceCellEditor
     },
     defaultColDef: {
@@ -295,25 +250,7 @@ export function GsbDataTable({
       resizable: true,
       floatingFilter: true,
       sortingOrder: ['asc', 'desc', null],
-      editable: true,
-      cellRenderer: (params: ICellRendererParams) => {
-        const context = (params.colDef as any).context;
-        
-        if (context?.isReference) {
-          return context.isMultiple ? 'MultiReferenceCellRenderer' : 'ReferenceCellRenderer';
-        }
-        
-        return undefined;
-      },
-      cellEditor: (params: ICellRendererParams) => {
-        const context = (params.colDef as any).context;
-        
-        if (context?.isReference) {
-          return context.isMultiple ? 'MultiReferenceCellEditor' : 'ReferenceCellEditor';
-        }
-        
-        return undefined;
-      }
+      editable: true
     },
     suppressRowClickSelection: true,
     suppressCellFocus: false,

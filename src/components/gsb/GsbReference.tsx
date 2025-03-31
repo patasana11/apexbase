@@ -94,18 +94,18 @@ export function GsbReference({
         }
     };
 
-    if (!referenceEntityDef) {
-        return <div className="text-gray-500"></div>;
-    }
 
     return (
-        <GsbAutocomplete
-            value={displayValue}
-            onChange={handleSelect}
-            entityDef={referenceEntityDef}
-            placeholder={placeholder}
-            className={className}
-            disabled={disabled}
-        />
+            <div className="w-full h-full">
+                <h1>Reference</h1>
+            <GsbAutocomplete
+                value={displayValue}
+                onChange={handleSelect}
+                entityDef={referenceEntityDef  || {}}
+                placeholder={placeholder}
+                className={className}
+                disabled={disabled}
+            />
+        </div>
     );
 } 

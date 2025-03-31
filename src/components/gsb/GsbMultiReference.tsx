@@ -6,80 +6,65 @@ import { GsbEntityService } from '@/lib/gsb/services/entity/gsb-entity.service';
 import { GsbPagination } from './GsbPagination';
 import { getCurrentTenant } from '@/lib/gsb/config/tenant-config';
 import { QueryParams } from '@/lib/gsb/types/query-params';
+import { DataTableQueryOptions } from '@/lib/gsb/services/entity/gsb-data-table.service';
 
 interface GsbMultiReferenceProps {
   entity?: any;
   onChange?: (values: string[]) => void;
-  parentEntityDefName: string;
   propName: string;
   placeholder?: string;
   className?: string;
   disabled?: boolean;
   pageSize?: number;
+  parentEntityDef: GsbEntityDef;
+  tableOptions?: DataTableQueryOptions
 }
 
 export function GsbMultiReference({
   entity,
   onChange,
-  parentEntityDefName,
+  parentEntityDef,
   propName,
   placeholder = 'Select references...',
   className = '',
   disabled = false,
-  pageSize = 10
+  tableOptions = {pageSize:10}
 }: GsbMultiReferenceProps) {
-  const [referenceEntityDef, setReferenceEntityDef] = useState<GsbEntityDef | null>(null);
   const [displayValues, setDisplayValues] = useState<Array<{ id: string; display: string }>>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    const loadReferenceEntityDef = async () => {
-      try {
-        const cacheService = GsbCacheService.getInstance();
-        const { entityDef } = await cacheService.getEntityDefWithPropertiesByName(parentEntityDefName);
-        const property = entityDef.properties?.find(p => p.name === propName);
-        if (!property?.refEntDef_id) {
-          throw new Error(`Property ${propName} not found or is not a reference`);
-        }
-        const { entityDef: refDef } = await cacheService.getEntityDefWithPropertiesByName(property.refEntDef_id);
-        setReferenceEntityDef(refDef);
-      } catch (error) {
-        console.error('Error loading reference entity definition:', error);
-      }
-    };
-
-    loadReferenceEntityDef();
-  }, [parentEntityDefName, propName]);
+  const [referenceEntityDef, setReferenceEntityDef] = useState<GsbEntityDef | null>(null);
 
   useEffect(() => {
     const loadDisplayValues = async () => {
-      if (!referenceEntityDef) return;
+      if (!parentEntityDef) return;
 
       setIsLoading(true);
       try {
         const entityService = GsbEntityService.getInstance();
         const tenantCode = getCurrentTenant();
-        const displayField = referenceEntityDef.title || 'id';
+        const displayField = 'title';
         
         // Get items for current page
-        const startIndex = (currentPage - 1) * pageSize;
-        const endIndex = startIndex + pageSize;
+        const startIndex = (currentPage - 1) * (tableOptions.pageSize || 10);
+        const endIndex = startIndex + (tableOptions.pageSize || 10);
         let values = entity[propName] ;
 
         if(!values){
-            const req = new QueryParams<any>(parentEntityDefName);
+            const req = new QueryParams<any>(parentEntityDef.name || '');
+            req.entityDef = parentEntityDef;
             req.propertyName = propName;
             req.startIndex = startIndex;
-            req.count = pageSize;
+            req.count = tableOptions.pageSize;
+            req.select(displayField).select('id');
             const resp = await entityService.queryMapped(req);
             values = resp.entities;
         }
         
 
         setDisplayValues(values);
-        setTotalPages(Math.ceil(values.length / pageSize));
+            setTotalPages(Math.ceil(values.length / (tableOptions.pageSize || 10)   ));
       } catch (error) {
         console.error('Error loading reference display values:', error);
       } finally {
@@ -88,10 +73,20 @@ export function GsbMultiReference({
     };
 
     loadDisplayValues();
-  }, [referenceEntityDef, entity, currentPage, pageSize]);
+  }, [parentEntityDef, entity, currentPage, tableOptions]);
+
+
+  useEffect(() => {
+    const loadReferenceEntityDef = async () => {
+      let referenceEntityDefId = parentEntityDef.properties?.find(p => p.name === propName)?.refEntDef_id;
+      let referenceEntityDef = await GsbCacheService.getInstance().getEntityDefWithProperties({id:referenceEntityDefId});
+      setReferenceEntityDef(referenceEntityDef);
+    }
+    loadReferenceEntityDef();
+  }, [parentEntityDef]);
 
   const handleSelect = async (selectedValue: any) => {
-    if (!selectedValue || !referenceEntityDef) return;
+    if (!selectedValue || !parentEntityDef) return;
     
     const entityService = GsbEntityService.getInstance();
     const tenantCode = getCurrentTenant();
@@ -99,9 +94,7 @@ export function GsbMultiReference({
     try {
       await entityService.saveMappedItems(
         {
-            entDefName: parentEntityDefName,
-            entDefId: '',
-            entityDef: {},
+            entityDef: parentEntityDef,
             items: [{id:selectedValue.id}],
             entityId: entity.id,
             propName: propName
@@ -117,7 +110,7 @@ export function GsbMultiReference({
   };
 
   const handleRemove = async (id: string) => {
-    if (!referenceEntityDef) return;
+    if (!parentEntityDef) return;
     
     const entityService = GsbEntityService.getInstance();
     const tenantCode = getCurrentTenant();
@@ -125,9 +118,7 @@ export function GsbMultiReference({
     try {
       await entityService.removeMappedItems(
         {
-            entDefName: parentEntityDefName,
-            entDefId: '',
-            entityDef: {},
+            entityDef: parentEntityDef,
             items: [{id}],
             entityId: entity.id,
             propName: propName
@@ -146,16 +137,13 @@ export function GsbMultiReference({
     setCurrentPage(page);
   };
 
-  if (!referenceEntityDef) {
-    return <div className="text-gray-500"></div>;
-  }
-
   return (
     <div className={`space-y-4 ${className}`}>
+        <h1>Multi Reference</h1>
       <GsbAutocomplete
         value=""
         onChange={handleSelect}
-        entityDef={referenceEntityDef}
+        entityDef={referenceEntityDef || {}}
         placeholder={placeholder}
         disabled={disabled}
       />

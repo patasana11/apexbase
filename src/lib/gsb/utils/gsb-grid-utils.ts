@@ -1,9 +1,13 @@
 import { ColDef } from 'ag-grid-community';
-import { GsbProperty, GsbPropertyDef, DataType, RefType } from '../models/gsb-entity-def.model';
+import { GsbProperty, GsbPropertyDef, DataType, RefType, GsbEntityDef } from '../models/gsb-entity-def.model';
 import { GsbEnum } from '../models/gsb-enum.model';
 
 export interface GridColumnConfig extends ColDef {
   context: {
+    property?: GsbProperty;
+    propertyDef?: GsbPropertyDef;
+    entityDef?: GsbEntityDef;
+
     propertyName?: string;
     dataType?: DataType;
     isSystemColumn?: boolean;
@@ -11,7 +15,6 @@ export interface GridColumnConfig extends ColDef {
     isEnum?: boolean;
     isRequired?: boolean;
     orderNumber?: number;
-    propertyDef?: GsbPropertyDef;
     isMultiple?: boolean;
     isSystem?: boolean;
   };
@@ -31,6 +34,7 @@ export class GsbGridUtils {
 
   public static createColumnDef(
     prop: GsbProperty,
+    entityDef: GsbEntityDef,
     enumCache: Map<string, GsbEnum>
   ): GridColumnConfig {
     // Use the definition if available
@@ -43,6 +47,8 @@ export class GsbGridUtils {
       field: prop.name,
       headerName: prop.title,
       context: {
+        property: prop,
+        entityDef: entityDef,
         propertyName: prop.name,
         dataType: propDef.dataType,
         isSystemColumn: this.isSystemColumn(prop),
@@ -126,13 +132,19 @@ export class GsbGridUtils {
     }
 
     // Handle reference fields
-    if (propDef.dataType === DataType.Reference) {
+    if (propDef.dataType === DataType.Reference  && !prop.isMultiple) {
       return {
         ...baseConfig,
-        cellRenderer: 'ReferenceCellRenderer',
         cellEditor: 'ReferenceCellEditor',
-        cellEditorParams: {
-          propertyDef: propDef
+        context: {
+          ...baseConfig.context,
+          isReference: true,
+          isMultiple: false,
+          property: propDef,
+          entityDef: entityDef
+        },
+        valueFormatter: (params: any) => {
+          return params.value ? params.value.title : '';
         }
       };
     }
@@ -143,8 +155,14 @@ export class GsbGridUtils {
         ...baseConfig,
         cellRenderer: 'MultiReferenceCellRenderer',
         cellEditor: 'MultiReferenceCellEditor',
-        cellEditorParams: {
-          propertyDef: propDef
+        context: {
+          ...baseConfig.context,
+          isReference: true,
+          isMultiple: true,
+          property: propDef
+        },
+        valueFormatter: (params: any) => {
+          return params.value ? params.value.map((v: any) => v.title).join(', ') : '';
         }
       };
     }
