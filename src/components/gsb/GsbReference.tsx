@@ -5,6 +5,10 @@ import { GsbCacheService } from '@/lib/gsb/services/cache/gsb-cache.service';
 import { GsbEntityService } from '@/lib/gsb/services/entity/gsb-entity.service';
 import { getCurrentTenant } from '@/lib/gsb/config/tenant-config';
 import { QueryParams } from '@/lib/gsb/types/query-params';
+import { Loader2, X, Search } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 interface GsbReferenceProps {
     entity: any;
@@ -14,7 +18,6 @@ interface GsbReferenceProps {
     placeholder?: string;
     className?: string;
     disabled?: boolean;
-    property: GsbProperty;
 }
 
 export function GsbReference({
@@ -24,11 +27,12 @@ export function GsbReference({
     propName,
     placeholder = 'Select reference...',
     className = '',
-    disabled = false,
-    property    
+    disabled = false
 }: GsbReferenceProps) {
     const [referenceEntityDef, setReferenceEntityDef] = useState<GsbEntityDef | null>(null);
     const [displayValue, setDisplayValue] = useState<string>('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [isClearing, setIsClearing] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -39,6 +43,7 @@ export function GsbReference({
                     return;
                 }
 
+                const property = parentEntityDef.properties.find(p => p.name === propName);
                 if (!property?.refEntDef_id) {
                     setError('Reference entity definition ID not found');
                     return;
@@ -63,7 +68,7 @@ export function GsbReference({
         };
 
         loadReferenceEntityDef();
-    }, [parentEntityDef,property, propName]);
+    }, [parentEntityDef, propName]);
 
     useEffect(() => {
         const loadDisplayValue = async () => {
@@ -98,23 +103,22 @@ export function GsbReference({
     }, [entity, referenceEntityDef, propName]);
 
     const handleSelect = async (selectedValue: any) => {
-        if (!selectedValue || !referenceEntityDef) return;
+        if (!selectedValue || !parentEntityDef) return;
 
-        const entityService = GsbEntityService.getInstance();
-        const tenantCode = getCurrentTenant();
-
+        setIsLoading(true);
         try {
             entity[propName] = selectedValue;
             entity[propName + "_id"] = selectedValue?.id;
 
             const upEntity = {
-                id:entity.id,
-                [propName + "_id"]:selectedValue?.id
-            }
+                id: entity.id,
+                [propName + "_id"]: selectedValue?.id
+            };
 
+            const entityService = GsbEntityService.getInstance();
             await entityService.save(
                 {
-                    entityDef: { name: parentEntityDef },
+                    entDefId: parentEntityDef.id,
                     entity: upEntity
                 }
             );
@@ -123,27 +127,85 @@ export function GsbReference({
             onChange?.(selectedValue);
         } catch (error) {
             console.error('Error saving mapped item:', error);
+            setError('Failed to save reference');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleClear = async () => {
+        if (!parentEntityDef) return;
+
+        setIsClearing(true);
+        try {
+            const entityService = GsbEntityService.getInstance();
+            await entityService.save(
+                {
+                    entityDef: { name: parentEntityDef },
+                    entity: {
+                        id: entity.id,
+                        [propName + "_id"]: null
+                    }
+                }
+            );
+
+            setDisplayValue('');
+            onChange?.('');
+        } catch (error) {
+            console.error('Error clearing reference:', error);
+            setError('Failed to clear reference');
+        } finally {
+            setIsClearing(false);
         }
     };
 
     if (error) {
-        return <div className="text-red-500">{error}</div>;
+        return (
+            <div className="flex items-center gap-2 p-2 bg-red-50 text-red-600 rounded-md">
+                <X className="h-4 w-4" />
+                <span>{error}</span>
+            </div>
+        );
     }
 
     if (!referenceEntityDef) {
-        return <div className="text-gray-500">Loading...</div>;
+        return (
+            <div className="flex items-center gap-2 p-2 text-gray-500">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Loading reference...</span>
+            </div>
+        );
     }
 
     return (
-        <div className="w-full h-full">
-            <GsbAutocomplete
-                value={displayValue}
-                onChange={handleSelect}
-                entityDef={referenceEntityDef}
-                placeholder={placeholder}
-                className={className}
-                disabled={disabled}
-            />
+        <div className={cn("flex items-center gap-2", className)}>
+            <div className="flex-1">
+                <GsbAutocomplete
+                    value={displayValue}
+                    onChange={handleSelect}
+                    entityDef={referenceEntityDef}
+                    placeholder={placeholder}
+                    disabled={disabled || isLoading || isClearing}
+                />
+            </div>
+            {displayValue && (
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleClear}
+                    disabled={disabled || isLoading || isClearing}
+                    className="h-8 w-8 text-gray-500 hover:text-red-500 hover:bg-red-50"
+                >
+                    {isClearing ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                        <X className="h-4 w-4" />
+                    )}
+                </Button>
+            )}
+            {isLoading && (
+                <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
+            )}
         </div>
     );
 } 

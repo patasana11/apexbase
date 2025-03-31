@@ -7,7 +7,11 @@ import { GsbPagination } from './GsbPagination';
 import { getCurrentTenant } from '@/lib/gsb/config/tenant-config';
 import { QueryParams } from '@/lib/gsb/types/query-params';
 import { DataTableQueryOptions } from '@/lib/gsb/services/entity/gsb-data-table.service';
-import { property } from 'lodash';
+import { Loader2, X, Plus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 interface GsbMultiReferenceProps {
   entity?: any;
@@ -37,6 +41,7 @@ export function GsbMultiReference({
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
+  const [isAdding, setIsAdding] = useState(false);
   const [referenceEntityDef, setReferenceEntityDef] = useState<GsbEntityDef | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -139,15 +144,16 @@ export function GsbMultiReference({
   const handleSelect = async (selectedValue: any) => {
     if (!selectedValue || !parentEntityDef) return;
     
+    setIsAdding(true);
     const entityService = GsbEntityService.getInstance();
     
     try {
       await entityService.saveMappedItems(
         {
-            entityDef: parentEntityDef,
-            items: [{id:selectedValue.id}],
-            entityId: entity.id,
-            propName: propName
+          entityDef: parentEntityDef,
+          items: [{id:selectedValue.id}],
+          entityId: entity.id,
+          propName: propName
         }
       );
 
@@ -156,30 +162,36 @@ export function GsbMultiReference({
       onChange?.(newValues);
     } catch (error) {
       console.error('Error saving mapped item:', error);
+      setError('Failed to add reference');
+    } finally {
+      setIsAdding(false);
     }
   };
 
   const handleRemove = async (id: string) => {
     if (!parentEntityDef) return;
     
+    setIsLoading(true);
     const entityService = GsbEntityService.getInstance();
-    const tenantCode = getCurrentTenant();
     
     try {
       await entityService.removeMappedItems(
         {
-            entityDef: parentEntityDef,
-            items: [{id}],
-            entityId: entity.id,
-            propName: propName
+          entityDef: parentEntityDef,
+          items: [{id}],
+          entityId: entity.id,
+          propName: propName
         }
-    );
-    let values = entity[propName] ;
+      );
       
+      let values = entity[propName];
       const newValues = values.filter((v: any) => v.id !== id);
       onChange?.(newValues);
     } catch (error) {
       console.error('Error removing mapped item:', error);
+      setError('Failed to remove reference');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -188,50 +200,86 @@ export function GsbMultiReference({
   };
 
   if (error) {
-    return <div className="text-red-500">{error}</div>;
+    return (
+      <div className="flex items-center gap-2 p-2 bg-red-50 text-red-600 rounded-md">
+        <X className="h-4 w-4" />
+        <span>{error}</span>
+      </div>
+    );
   }
 
   if (!referenceEntityDef) {
-    return <div className="text-gray-500">Loading...</div>;
+    return (
+      <div className="flex items-center gap-2 p-2 text-gray-500">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        <span>Loading references...</span>
+      </div>
+    );
   }
 
   return (
-    <div className={`space-y-4 ${className}`}>
-      <GsbAutocomplete
-        value=""
-        onChange={handleSelect}
-        entityDef={referenceEntityDef}
-        placeholder={placeholder}
-        disabled={disabled}
-      />
+    <div className={cn("space-y-4", className)}>
+      <div className="flex items-center gap-2">
+        <GsbAutocomplete
+          value=""
+          onChange={handleSelect}
+          entityDef={referenceEntityDef}
+          placeholder={placeholder}
+          disabled={disabled || isAdding}
+          className="flex-1"
+        />
+        {isAdding && (
+          <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
+        )}
+      </div>
       
       <div className="space-y-2">
         {isLoading ? (
-          <div className="text-gray-500">Loading...</div>
+          <div className="flex items-center gap-2 p-2 text-gray-500">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Loading...</span>
+          </div>
         ) : (
           <>
-            {displayValues?.map(({ id, title }) => (
-              <div
-                key={id}
-                className="flex items-center justify-between p-2 bg-gray-50 rounded"
-              >
-                <span>{title}</span>
-                <button
-                  onClick={() => handleRemove(id)}
-                  disabled={disabled}
-                  className="text-red-500 hover:text-red-700 disabled:opacity-50"
-                >
-                  Remove
-                </button>
+            <ScrollArea className="h-[200px] rounded-md border p-2">
+              <div className="space-y-2">
+                {displayValues?.map(({ id, title }) => (
+                  <div
+                    key={id}
+                    className="flex items-center justify-between p-2 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className="font-normal">
+                        {title}
+                      </Badge>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleRemove(id)}
+                      disabled={disabled || isLoading}
+                      className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+                {!displayValues?.length && (
+                  <div className="flex items-center justify-center h-20 text-gray-500">
+                    No references selected
+                  </div>
+                )}
               </div>
-            ))}
+            </ScrollArea>
             
-            {displayValues?.length && (
-              <GsbPagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={handlePageChange}
-              />
+            {displayValues?.length > 0 && (
+              <div className="flex justify-center">
+                <GsbPagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={handlePageChange}
+                />
+              </div>
             )}
           </>
         )}
