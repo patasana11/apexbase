@@ -1,58 +1,120 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { ChevronDown, ChevronRight, GripVertical, Search, Filter, Columns, Eye, EyeOff, SortAsc, SortDesc, Filter as FilterIcon } from 'lucide-react';
+import { ChevronDown, ChevronRight, GripVertical, Search, Columns, Eye, EyeOff, X, Save, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { GsbProperty } from '@/lib/gsb/models/gsb-entity-def.model';
+import { GsbProperty, GsbEntityDef, DataType } from '@/lib/gsb/models/gsb-entity-def.model';
+import { GsbCacheService } from '@/lib/gsb/services/cache/gsb-cache.service';
+import { debounce } from 'lodash';
+import { GsbDataTableService } from '@/lib/gsb/services/entity/gsb-data-table.service';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { GsbUser } from '@/lib/gsb/models/gsb-user.model';
+import { GsbModule } from '@/lib/gsb/models/gsb-module.model';
+import { GsbResourcePackTmpl } from '@/lib/gsb/models/gsb-resource-pack-tmpl.model';
+
+export interface GsbUserQuery {
+  resPackTmps: GsbResourcePackTmpl[];
+  module_id: string;
+  lastUpdatedBy_id: string;
+  createdBy: GsbUser;
+  entityDefinition_id: string;
+  title: string;
+  lastUpdateDate: Date;
+  module: GsbModule;
+  commonAccess: boolean;
+  id: string;
+  lastUpdatedBy: GsbUser;
+  defaultQueryDef_id: string;
+  query: string;
+  createDate: Date;
+  defaultQueryDef: GsbEntityDef;
+  entityDefinition: GsbEntityDef;
+  createdBy_id: string;
+  name: string;
+  transposeScript: string;
+}
+
+interface ColumnConfig {
+  property: GsbProperty;
+  visible: boolean;
+  path?: string;
+}
 
 interface ColumnManagementBarProps {
-  columns: Array<{
-    property: GsbProperty;
-    visible: boolean;
-    sortable: boolean;
-    filterable: boolean;
-  }>;
-  onColumnChange: (columns: any[]) => void;
+  columns: ColumnConfig[];
+  onColumnChange: (columns: ColumnConfig[]) => void;
   className?: string;
+  entityDef: GsbEntityDef;
+  onStateLoad?: (state: any) => void;
+}
+
+interface ReferencePropertyNode {
+  property: GsbProperty;
+  children?: ReferencePropertyNode[];
+  expanded?: boolean;
+  path: string;
+  entityDef?: GsbEntityDef;
 }
 
 export function ColumnManagementBar({
   columns,
   onColumnChange,
-  className
+  className,
+  entityDef,
+  onStateLoad
 }: ColumnManagementBarProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState<'all' | 'system' | 'reference' | 'custom'>('all');
   const [showColumnSelector, setShowColumnSelector] = useState(false);
+  const [sheetSearchQuery, setSheetSearchQuery] = useState('');
+  const [expandedRefs, setExpandedRefs] = useState<Set<string>>(new Set());
+  const [referenceNodes, setReferenceNodes] = useState<ReferencePropertyNode[]>([]);
+  const [savedStates, setSavedStates] = useState<any[]>([]);
+  const searchTimeoutRef = useRef<NodeJS.Timeout>();
+  const dataTableService = GsbDataTableService.getInstance();
+  const [newViewTitle, setNewViewTitle] = useState('');
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+
+  // Load saved states
+  useEffect(() => {
+    const loadStates = async () => {
+      const states = await dataTableService.loadGridStates(entityDef.id || '');
+      setSavedStates(states);
+    };
+    loadStates();
+  }, [entityDef]);
+
+  // Debounced search handler
+  const debouncedSearch = useCallback(
+    debounce((value: string) => {
+      setSearchQuery(value);
+    }, 300),
+    []
+  );
+
+  // Clear search
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+  };
+
+  // Handle search input change
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    debouncedSearch(value);
+  };
 
   const filteredColumns = columns.filter(col => {
-    const matchesSearch = searchQuery === '' || 
+    return searchQuery === '' || 
       (col.property.title || col.property.name || '').toLowerCase().includes(searchQuery.toLowerCase());
-    
-    if (!matchesSearch) return false;
-
-    switch (activeFilter) {
-      case 'system':
-        return col.property.name === 'createdAt' || 
-               col.property.name === 'updatedAt' || 
-               col.property.name === 'createdBy' || 
-               col.property.name === 'updatedBy';
-      case 'reference':
-        return col.property.name?.endsWith('_id');
-      case 'custom':
-        return !col.property.name?.endsWith('_id') && 
-               col.property.name !== 'createdAt' && 
-               col.property.name !== 'updatedAt' && 
-               col.property.name !== 'createdBy' && 
-               col.property.name !== 'updatedBy';
-      default:
-        return true;
-    }
   });
 
   const handleColumnToggle = (propertyName: string) => {
@@ -65,33 +127,11 @@ export function ColumnManagementBar({
     );
   };
 
-  const handleSortableToggle = (propertyName: string) => {
-    onColumnChange(
-      columns.map(col => 
-        col.property.name === propertyName
-          ? { ...col, sortable: !col.sortable }
-          : col
-      )
-    );
-  };
-
-  const handleFilterableToggle = (propertyName: string) => {
-    onColumnChange(
-      columns.map(col => 
-        col.property.name === propertyName
-          ? { ...col, filterable: !col.filterable }
-          : col
-      )
-    );
-  };
-
   const handleShowAll = () => {
     onColumnChange(
       columns.map(col => ({
         ...col,
-        visible: true,
-        sortable: true,
-        filterable: true
+        visible: true
       }))
     );
   };
@@ -100,61 +140,68 @@ export function ColumnManagementBar({
     onColumnChange(
       columns.map(col => ({
         ...col,
-        visible: false,
-        sortable: false,
-        filterable: false
+        visible: false
       }))
     );
   };
 
+  const handleSaveState = async () => {
+    if (!newViewTitle.trim()) return;
+    
+    const state = {
+      columns: columns.map(col => ({
+        propertyName: col.property.name,
+        visible: col.visible,
+        path: col.path
+      }))
+    };
+
+    await dataTableService.saveGridState(entityDef.id || '', state, newViewTitle);
+    const states = await dataTableService.loadGridStates(entityDef.id || '');
+    setSavedStates(states);
+    setShowSaveDialog(false);
+    setNewViewTitle('');
+  };
+
+  const handleLoadState = async (state: any) => {
+    let parsedState;
+    try {
+      const decodedQuery = atob(state.query);
+      parsedState = JSON.parse(decodedQuery);
+    } catch (e) {
+      // If base64 decode fails, try direct JSON parse
+      parsedState = JSON.parse(state.query);
+    }
+    onStateLoad?.(parsedState);
+  };
+
+  const handleDeleteState = async (stateId: string) => {
+    await dataTableService.deleteGridState(stateId);
+    const states = await dataTableService.loadGridStates(entityDef.id || '');
+    setSavedStates(states);
+  };
+
   return (
     <div className={cn("flex items-center gap-4 p-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60", className)}>
-      {/* Search and Filters */}
-      <div className="flex-1 flex items-center gap-4">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search columns..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-8"
-          />
-        </div>
-
-        <div className="flex items-center gap-2">
+      {/* Search */}
+      <div className="relative flex-1 max-w-sm">
+        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search columns..."
+          value={searchQuery}
+          onChange={handleSearchChange}
+          className="pl-8 pr-8"
+        />
+        {searchQuery && (
           <Button
-            variant={activeFilter === 'all' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setActiveFilter('all')}
+            variant="ghost"
+            size="icon"
+            className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 p-0"
+            onClick={handleClearSearch}
           >
-            <Columns className="h-4 w-4 mr-2" />
-            All
+            <X className="h-3 w-3" />
           </Button>
-          <Button
-            variant={activeFilter === 'system' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setActiveFilter('system')}
-          >
-            <Filter className="h-4 w-4 mr-2" />
-            System
-          </Button>
-          <Button
-            variant={activeFilter === 'reference' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setActiveFilter('reference')}
-          >
-            <Filter className="h-4 w-4 mr-2" />
-            References
-          </Button>
-          <Button
-            variant={activeFilter === 'custom' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setActiveFilter('custom')}
-          >
-            <Filter className="h-4 w-4 mr-2" />
-            Custom
-          </Button>
-        </div>
+        )}
       </div>
 
       {/* Quick Actions */}
@@ -175,6 +222,53 @@ export function ColumnManagementBar({
           <Eye className="h-4 w-4 mr-2" />
           Show All
         </Button>
+
+        {/* Save State */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowSaveDialog(true)}
+        >
+          <Save className="h-4 w-4 mr-2" />
+          Save View
+        </Button>
+
+        {/* Load State */}
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button variant="outline" size="sm">
+              <Upload className="h-4 w-4 mr-2" />
+              Load View
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Load Saved View</DialogTitle>
+            </DialogHeader>
+            <ScrollArea className="h-[300px]">
+              <div className="space-y-2">
+                {savedStates.map((state) => (
+                  <div key={state.id} className="flex items-center justify-between p-2 border rounded">
+                    <Button
+                      variant="ghost"
+                      className="flex-1 justify-start"
+                      onClick={() => handleLoadState(state)}
+                    >
+                      {state.title}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDeleteState(state.id)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </DialogContent>
+        </Dialog>
 
         {/* Column Selector Sheet */}
         <Sheet open={showColumnSelector} onOpenChange={setShowColumnSelector}>
@@ -206,8 +300,19 @@ export function ColumnManagementBar({
                 </div>
               </div>
 
+              {/* Sheet Search */}
+              <div className="relative mb-4">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search columns..."
+                  value={sheetSearchQuery}
+                  onChange={(e) => setSheetSearchQuery(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+
               <ScrollArea className="flex-1">
-                <div className="space-y-4">
+                <div className="space-y-1">
                   {filteredColumns.map((col) => (
                     <div
                       key={col.property.name}
@@ -218,21 +323,16 @@ export function ColumnManagementBar({
                         <Label className="text-sm font-medium truncate">
                           {col.property.title || col.property.name}
                         </Label>
+                        {col.path && (
+                          <div className="text-xs text-muted-foreground truncate">
+                            {col.path}
+                          </div>
+                        )}
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={col.visible}
-                          onCheckedChange={() => handleColumnToggle(col.property.name || '')}
-                        />
-                        <Switch
-                          checked={col.sortable}
-                          onCheckedChange={() => handleSortableToggle(col.property.name || '')}
-                        />
-                        <Switch
-                          checked={col.filterable}
-                          onCheckedChange={() => handleFilterableToggle(col.property.name || '')}
-                        />
-                      </div>
+                      <Switch
+                        checked={col.visible}
+                        onCheckedChange={() => handleColumnToggle(col.property.name || '')}
+                      />
                     </div>
                   ))}
                 </div>
@@ -241,6 +341,33 @@ export function ColumnManagementBar({
           </SheetContent>
         </Sheet>
       </div>
+
+      {/* Save Dialog */}
+      <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Save View</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="name" className="text-right">
+                Name
+              </Label>
+              <Input
+                id="name"
+                value={newViewTitle}
+                onChange={(e) => setNewViewTitle(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button type="submit" onClick={handleSaveState}>
+              Save
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 } 

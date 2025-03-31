@@ -1,6 +1,7 @@
 import { ColDef } from 'ag-grid-community';
 import { GsbProperty, GsbPropertyDef, DataType, RefType, GsbEntityDef } from '../models/gsb-entity-def.model';
 import { GsbEnum } from '../models/gsb-enum.model';
+import { QueryParams } from '../types/query-params';
 
 export interface GridColumnConfigContext {
   property?: GsbProperty;
@@ -21,6 +22,11 @@ export interface GridColumnConfig extends ColDef {
     context: GridColumnConfigContext;
 }
 
+export interface GridViewState {
+  queryParams: QueryParams<any>;
+  columnDefs: GridColumnConfig[];
+}
+
 export class GsbGridUtils {
   private static readonly SYSTEM_COLUMNS = [
     'createDate',
@@ -31,6 +37,74 @@ export class GsbGridUtils {
 
   public static isSystemColumn(prop: GsbProperty): boolean {
     return prop.isSystem || this.SYSTEM_COLUMNS.includes(prop.name || '');
+  }
+
+  public static createDefaultView(
+    entityDef: GsbEntityDef,
+    propertyDefs: GsbProperty[],
+    enumCache: Map<string, GsbEnum>
+  ): GridViewState {
+    const queryParams = new QueryParams(entityDef.name || '');
+    
+    // Create column definitions for all non-system, non-reference properties
+    const columnDefs = propertyDefs
+      .filter(prop => !this.isSystemColumn(prop) && prop.definition?.dataType !== DataType.Reference)
+      .sort((a, b) => (a.title || a.name || '').localeCompare(b.title || b.name || ''))
+      .map(prop => this.createColumnDef(prop, entityDef, enumCache));
+
+    // Set initial selectCols
+    queryParams.selectCols = columnDefs.map(col => ({
+      name: col.field || ''
+    }));
+
+    return { queryParams, columnDefs };
+  }
+
+  public static createColumnDefsFromView(
+    view: QueryParams<any>,
+    entityDef: GsbEntityDef,
+    enumCache: Map<string, GsbEnum>
+  ): GridColumnConfig[] {
+    if (!view.selectCols || !entityDef?.properties?.length) return [];
+
+    // Get all properties that match the selectCols
+    const selectedProperties = view.selectCols
+      .map(selectCol => entityDef.properties?.find(p => p.name === selectCol.name))
+      .filter((p): p is GsbProperty => p !== undefined);
+
+    // Create column definitions maintaining order from selectCols
+    return selectedProperties.map(prop => 
+      this.createColumnDef(prop, entityDef, enumCache)
+    );
+  }
+
+  public static updateViewFromColumnChanges(
+    view: QueryParams<any>,
+    changes: {
+      visible?: boolean;
+      propertyName: string;
+    }[]
+  ): QueryParams<any> {
+    const newView = new QueryParams(view.entDefName || '');
+    const selectCols = view.selectCols || [];
+
+    changes.forEach(change => {
+      if (change.visible) {
+        // Add column if not present
+        if (!selectCols.some(col => col.name === change.propertyName)) {
+          selectCols.push({ name: change.propertyName });
+        }
+      } else {
+        // Remove column if present
+        const index = selectCols.findIndex(col => col.name === change.propertyName);
+        if (index !== -1) {
+          selectCols.splice(index, 1);
+        }
+      }
+    });
+
+    newView.selectCols = selectCols;
+    return newView;
   }
 
   public static createColumnDef(
@@ -107,7 +181,7 @@ export class GsbGridUtils {
         // Bitwise enum configuration using custom editor component
         return {
           ...baseConfig,
-          cellEditor: 'BitwiseEnumEditor',
+          cellEditor: 'bitwiseEnumEditor',
           cellEditorParams: {
             values: enumValues.map(v => v.value),
             labels: enumValues.map(v => v.title || v.value)
@@ -133,42 +207,40 @@ export class GsbGridUtils {
     }
 
     // Handle reference fields
-    if (propDef.dataType === DataType.Reference  && !prop.isMultiple) {
-      return {
-        ...baseConfig,
-        cellEditor: 'ReferenceCellEditor',
-        context: {
-          ...baseConfig.context,
-          isReference: true,
-          isMultiple: false,
-          property: prop,
-          propertyDef: propDef,
-          entityDef: entityDef
-        },
-        valueFormatter: (params: any) => {
-          return params.value ? params.value.title : '';
-        }
-      };
-    }
-
-    // Handle multi-reference fields
-    if (propDef.dataType === DataType.Reference && prop.isMultiple) {
-      return {
-        ...baseConfig,
-        cellRenderer: 'MultiReferenceCellRenderer',
-        cellEditor: 'MultiReferenceCellEditor',
-        context: {
-          ...baseConfig.context,
-          isReference: true,
-          isMultiple: true,
-          property: prop,
-          propertyDef: propDef,
-          entityDef: entityDef
-        },
-        valueFormatter: (params: any) => {
-          return params.value ? params.value.map((v: any) => v.title).join(', ') : '';
-        }
-      };
+    if (propDef.dataType === DataType.Reference) {
+      if (prop.isMultiple) {
+        return {
+          ...baseConfig,
+          cellEditor: 'multiReferenceEditor',
+          context: {
+            ...baseConfig.context,
+            isReference: true,
+            isMultiple: true,
+            property: prop,
+            propertyDef: propDef,
+            entityDef: entityDef
+          },
+          valueFormatter: (params: any) => {
+            return params.value ? params.value.map((v: any) => v.title).join(', ') : '';
+          }
+        };
+      } else {
+        return {
+          ...baseConfig,
+          cellEditor: 'referenceEditor',
+          context: {
+            ...baseConfig.context,
+            isReference: true,
+            isMultiple: false,
+            property: prop,
+            propertyDef: propDef,
+            entityDef: entityDef
+          },
+          valueFormatter: (params: any) => {
+            return params.value ? params.value.title : '';
+          }
+        };
+      }
     }
 
     return baseConfig;

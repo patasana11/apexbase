@@ -12,6 +12,7 @@ import { GsbEnum } from '@/lib/gsb/models/gsb-enum.model';
 import { cn } from '@/lib/utils';
 import { DataType } from '@/lib/gsb/models/gsb-entity-def.model';
 import { ColumnManagementBar } from './column-management-bar';
+import { QueryParams } from '@/lib';
 
 interface ColumnConfig {
   property: GsbProperty;
@@ -40,10 +41,11 @@ interface ColumnConfig {
 }
 
 interface ColumnSettingsPanelProps {
-  entityDefId: string;
+  entityDef: GsbEntityDef;
   columns: ColumnConfig[];
   onColumnChange: (columns: ColumnConfig[]) => void;
   className?: string;
+  state: QueryParams<any>
 }
 
 interface ReferenceTypeNode {
@@ -54,7 +56,7 @@ interface ReferenceTypeNode {
 }
 
 export function ColumnSettingsPanel({
-  entityDefId,
+  entityDef,
   columns,
   onColumnChange,
   className
@@ -68,13 +70,13 @@ export function ColumnSettingsPanel({
   useEffect(() => {
     const loadReferenceTypes = async () => {
       const cacheService = GsbCacheService.getInstance();
-      const { entityDef } = await cacheService.getEntityDefWithProperties(entityDefId);
+      entityDef = await cacheService.getEntityDefWithProperties(entityDef);
       
       if (!entityDef) return;
 
       // Separate reference and non-reference types
-      const refTypes = entityDef.properties?.filter(p => p.refType) || [];
-      const nonRefTypes = entityDef.properties?.filter(p => !p.refType) || [];
+      const refTypes = entityDef.properties?.filter(p => p.definition?.dataType === DataType.Reference) || [];
+      const nonRefTypes = entityDef.properties?.filter(p => p.definition?.dataType !== DataType.Reference ) || [];
 
       // Sort alphabetically
       const sortedNonRefTypes = [...nonRefTypes].sort((a, b) => 
@@ -106,24 +108,24 @@ export function ColumnSettingsPanel({
     };
 
     loadReferenceTypes();
-  }, [entityDefId]);
+  }, [entityDef]);
 
   useEffect(() => {
     const loadEnums = async () => {
       const cacheService = GsbCacheService.getInstance();
-      const { entityDef } = await cacheService.getEntityDefWithProperties(entityDefId);
+      entityDef  = await cacheService.getEntityDefWithProperties(entityDef);
       
       if (!entityDef) return;
 
-      const enumProps = entityDef.properties?.filter(p => p.enumType) || [];
+      const enumProps = entityDef.properties?.filter(p => p.definition?.dataType === DataType.Enum) || [];
       const enumMap: Record<string, GsbEnum> = {};
 
       await Promise.all(
         enumProps.map(async (prop) => {
-          if (prop.enumType && !enumMap[prop.enumType]) {
-            const enumDef = await cacheService.getEnum(prop.enumType);
+          if (prop.enum_id && !enumMap[prop.enum_id]) {
+            const enumDef = await cacheService.getEnum(prop.enum_id);
             if (enumDef) {
-              enumMap[prop.enumType] = enumDef;
+              enumMap[prop.enum_id] = enumDef;
             }
           }
         })
@@ -133,7 +135,7 @@ export function ColumnSettingsPanel({
     };
 
     loadEnums();
-  }, [entityDefId]);
+  }, [entityDef]);
 
   const toggleRefExpansion = (refId: string) => {
     const newExpandedRefs = new Set(expandedRefs);
@@ -269,14 +271,7 @@ export function ColumnSettingsPanel({
               checked={column?.visible}
               onCheckedChange={() => handleColumnToggle(node.property.name || '')}
             />
-            <Switch
-              checked={column?.sortable}
-              onCheckedChange={() => handleSortableToggle(node.property.name || '')}
-            />
-            <Switch
-              checked={column?.filterable}
-              onCheckedChange={() => handleFilterableToggle(node.property.name || '')}
-            />
+
           </div>
         </div>
         {isExpanded && hasChildren && (

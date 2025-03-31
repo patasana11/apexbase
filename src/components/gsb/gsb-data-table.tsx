@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, forwardRef } from 'react';
+import React, { useEffect, useState, useMemo, forwardRef, useCallback } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { 
   GridOptions, 
@@ -30,19 +30,25 @@ import {
   EventApiModule,
   CheckboxEditorModule,
   InfiniteRowModelModule,
-  CustomEditorModule
+  CustomEditorModule,
+  SortChangedEvent,
+  FilterChangedEvent,
+  NumberEditorModule,
+  Theme
 } from 'ag-grid-community';
-import { GsbEntityDef, GsbProperty, GsbPropertyDef } from '@/lib/gsb/models/gsb-entity-def.model';
+import { GsbEntityDef, GsbProperty, GsbPropertyDef, DataType } from '@/lib/gsb/models/gsb-entity-def.model';
 import { GsbCacheService } from '@/lib/gsb/services/cache/gsb-cache.service';
 import { GsbEnum } from '@/lib/gsb/models/gsb-enum.model';
 import { GsbUtils } from '@/lib/gsb/utils/gsb-utils';
-import { GridColumnConfig, GridColumnConfigContext, GsbGridUtils } from '@/lib/gsb/utils/gsb-grid-utils';
+import { GridColumnConfig, GridColumnConfigContext, GsbGridUtils, GridViewState } from '@/lib/gsb/utils/gsb-grid-utils';
 import BitwiseEnumEditor from './BitwiseEnumEditor';  // Import the custom editor
 import { GsbReference } from './GsbReference';
 import { GsbMultiReference } from './GsbMultiReference';
 import { ColumnManagementBar } from './column-management-bar';
+import { QueryParams } from '@/lib/gsb/types/query-params';
+import { SingleQuery, QueryFunction } from '@/lib/gsb/types/query';
 
-// Import AG Grid styles - using only the new theme
+// Import AG Grid styles for legacy theme
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
 
@@ -66,7 +72,8 @@ ModuleRegistry.registerModules([
   EventApiModule,
   CheckboxEditorModule,
   InfiniteRowModelModule,
-  CustomEditorModule
+  CustomEditorModule,
+  NumberEditorModule
 ]);
 
 interface GsbDataTableProps {
@@ -80,8 +87,15 @@ interface GsbDataTableProps {
   onPageSizeChange: (pageSize: number) => void;
   onSortChange?: (field: string, direction: 'ASC' | 'DESC') => void;
   onFilterChange?: (filters: Record<string, any>) => void;
+  view?: QueryParams<any>;
+  onViewChange?: (view: QueryParams<any>) => void;
 }
 
+interface ColumnConfig {
+  property: GsbProperty;
+  visible: boolean;
+  path?: string;
+}
 
 // Custom cell editor for reference fields
 const ReferenceCellEditor = forwardRef((props: any, ref) => {
@@ -137,8 +151,10 @@ const MultiReferenceCellEditor = forwardRef((props: any, ref) => {
 });
 
 export function GsbDataTable({ 
-  entityDefName, 
-  data, 
+  entityDefName,
+  view: initialView,
+  onViewChange,
+  data,
   onDataChange,
   totalCount,
   page,
@@ -149,187 +165,230 @@ export function GsbDataTable({
   onFilterChange
 }: GsbDataTableProps) {
   const [gridApi, setGridApi] = useState<GridApi | null>(null);
-  const [columns, setColumns] = useState<Column[] | null>(null);
   const [entityDef, setEntityDef] = useState<GsbEntityDef | null>(null);
   const [propertyDefs, setPropertyDefs] = useState<GsbProperty[]>([]);
   const [enumCache, setEnumCache] = useState<Map<string, GsbEnum>>(new Map());
-  const [rowData, setRowData] = useState<any[]>([]);
-  const [columnDefs, setColumnDefs] = useState<GridColumnConfig[]>([]);
-  const [columnConfigs, setColumnConfigs] = useState<Array<{
-    property: GsbProperty;
-    visible: boolean;
-    sortable: boolean;
-    filterable: boolean;
-  }>>([]);
-
-  // Configure column definitions
-  useEffect(() => {
-    if (!propertyDefs.length) return;
-
-    const newColumnDefs = propertyDefs
-      .map(prop => GsbGridUtils.createColumnDef(prop,entityDef || {}, enumCache))
-      .filter(col => !col.context.isSystemColumn)
-      .sort((a, b) => (a.context.orderNumber || 0) - (b.context.orderNumber || 0));
-
-    setColumnDefs(newColumnDefs);
-
-    // Initialize column configs
-    const initialConfigs = propertyDefs
-      .filter(prop => !GsbGridUtils.isSystemColumn(prop))
-      .map(prop => ({
-        property: prop,
-        visible: true,
-        sortable: true,
-        filterable: true
-      }));
-    setColumnConfigs(initialConfigs);
-  }, [ entityDef, propertyDefs, enumCache]);
+  const [view, setView] = useState<GridViewState>(() => {
+    if (initialView) {
+      return {
+        queryParams: initialView,
+        columnDefs: GsbGridUtils.createColumnDefsFromView(initialView, entityDef || {}, enumCache)
+      };
+    }
+    return GsbGridUtils.createDefaultView(entityDef || {}, propertyDefs, enumCache);
+  });
 
   // Load entity definition and properties
   useEffect(() => {
     const loadEntityDef = async () => {
-      try {
-        const cacheService = GsbCacheService.getInstance();
-        const { entityDef, properties: propertyDefs } = await cacheService.getEntityDefWithPropertiesByName(entityDefName);
-        setEntityDef(entityDef);
-        setPropertyDefs(propertyDefs);
+      const cacheService = GsbCacheService.getInstance();
+      const { entityDef, properties } = await cacheService.getEntityDefWithPropertiesByName(entityDefName);
+      setEntityDef(entityDef);
+      setPropertyDefs(properties);
 
-        if (entityDef?.properties) {
-          // Collect all enum IDs
-          const enumIds = entityDef.properties
-            .filter(prop => prop.enum_id && GsbUtils.isValidId(prop.enum_id))
-            .map(prop => prop.enum_id!);
+      // Load enums
+      if (entityDef?.properties) {
+        const enumIds = entityDef.properties
+          .filter(prop => prop.enum_id && GsbUtils.isValidId(prop.enum_id))
+          .map(prop => prop.enum_id!);
 
-          // Load all enums
-          const enums = await Promise.all(
-            enumIds.map(id => cacheService.getEnum(id))
-          );
+        const enums = await Promise.all(
+          enumIds.map(id => cacheService.getEnum(id))
+        );
 
-          // Create enum cache
-          const enumMap = new Map<string, GsbEnum>();
-          enums.forEach(enumDef => {
-            if (enumDef && GsbUtils.isValidId(enumDef.id)) {
-              enumMap.set(enumDef.id!, enumDef);
-            }
-          });
-          setEnumCache(enumMap);
-        }
-      } catch (error) {
-        console.error('Error loading entity definition:', error);
+        const enumMap = new Map<string, GsbEnum>();
+        enums.forEach(enumDef => {
+          if (enumDef && GsbUtils.isValidId(enumDef.id)) {
+            enumMap.set(enumDef.id!, enumDef);
+          }
+        });
+        setEnumCache(enumMap);
       }
     };
 
     loadEntityDef();
   }, [entityDefName]);
 
-  // Update row data when data prop changes
+  // Update view when entityDef or propertyDefs change
   useEffect(() => {
-    setRowData(data);
-  }, [data]);
-
-  // Handle column changes from ColumnManagementBar
-  const handleColumnChange = (newConfigs: Array<{
-    property: GsbProperty;
-    visible: boolean;
-    sortable: boolean;
-    filterable: boolean;
-  }>) => {
-    setColumnConfigs(newConfigs);
+    if (!entityDef || !propertyDefs.length) return;
     
-    // Update grid columns
-    if (gridApi) {
-      const updatedColumnDefs = columnDefs.map(colDef => {
-        const config = newConfigs.find(c => c.property.name === colDef.field);
-        if (config) {
-          return {
-            ...colDef,
-            hide: !config.visible,
-            sortable: config.sortable,
-            filter: config.filterable
-          };
-        }
-        return colDef;
-      });
-      
-      setColumnDefs(updatedColumnDefs);
+    if (!initialView) {
+      const defaultView = GsbGridUtils.createDefaultView(entityDef, propertyDefs, enumCache);
+      // Initialize pagination parameters
+      defaultView.queryParams.startIndex = 0;
+      defaultView.queryParams.count = pageSize;
+      setView(defaultView);
+    } else {
+      // Update column definitions with editors for the initial view
+      const updatedColumnDefs = GsbGridUtils.createColumnDefsFromView(initialView, entityDef, enumCache);
+      setView(prev => ({
+        ...prev,
+        columnDefs: updatedColumnDefs
+      }));
     }
+  }, [entityDef, propertyDefs, enumCache, initialView, pageSize]);
+
+  // Handle view changes from ColumnManagementBar
+  const handleViewChange = (newQueryParams: QueryParams<any>) => {
+    // Ensure startIndex is non-negative
+    newQueryParams.startIndex = Math.max(0, (page - 1) * pageSize);
+    newQueryParams.count = pageSize;
+
+    const newView = {
+      queryParams: newQueryParams,
+      columnDefs: GsbGridUtils.createColumnDefsFromView(newQueryParams, entityDef || {}, enumCache)
+    };
+    setView(newView);
+    onViewChange?.(newQueryParams);
   };
 
-  // Grid ready event handler
+  // Handle pagination changes
+  const handlePaginationChanged = (event: any) => {
+    const newPage = event.api.paginationGetCurrentPage();
+    const newPageSize = event.api.paginationGetPageSize();
+    
+    // Create a new QueryParams instance to ensure we have all required methods
+    const newQueryParams = new QueryParams(entityDefName);
+    Object.assign(newQueryParams, view.queryParams);
+    
+    // Calculate startIndex ensuring it's non-negative
+    newQueryParams.startIndex = Math.max(0, newPage * newPageSize);
+    newQueryParams.count = newPageSize;
+    
+    handleViewChange(newQueryParams);
+    onPageChange(newPage);
+    onPageSizeChange(newPageSize);
+  };
+
+  // Handle grid events
   const onGridReady = (params: GridReadyEvent) => {
     setGridApi(params.api);
-    if (params.api) {
-      setColumns(params.api.getColumnDefs() as Column[]);
-      params.api.sizeColumnsToFit();
-
-      // Add event listeners for sorting and filtering
-      params.api.addEventListener('sortChanged', () => {
-        const sortModel = params.api.getColumnDefs() as SortModelItem[];
-        if (sortModel.length > 0) {
-          const { colId, sort } = sortModel[0];
-          onSortChange?.(colId, sort as 'ASC' | 'DESC');
-        }
-      });
-
-      params.api.addEventListener('filterChanged', () => {
-        const filterModel = params.api.getFilterModel() as FilterModel;
-        onFilterChange?.(filterModel);
+    if (view.columnDefs) {
+      const columnState = view.columnDefs.map(col => ({
+        colId: col.field as string,
+        hide: col.hide,
+        sort: col.sort,
+        width: col.width,
+        pinned: col.pinned
+      }));
+      params.api.applyColumnState({
+        state: columnState,
+        applyOrder: true
       });
     }
   };
 
-  // Grid options
+  const onSortChanged = (event: SortChangedEvent) => {
+    const columnDefs = event.api.getColumnDefs() as ColDef[];
+    const newView = { ...view };
+    newView.queryParams.sortCols = columnDefs
+      .filter(col => col.sort)
+      .map(col => ({
+        col: { name: col.field as string },
+        sortType: col.sort as 'ASC' | 'DESC'
+      }));
+    handleViewChange(newView.queryParams);
+  };
+
+  const onFilterChanged = (event: FilterChangedEvent) => {
+    const filterModel = event.api.getFilterModel() as FilterModel;
+    const newQueryParams = new QueryParams(entityDefName);
+    Object.assign(newQueryParams, view.queryParams);
+    
+    newQueryParams.query = Object.entries(filterModel).map(([field, filter]) => {
+      const query = new SingleQuery(field);
+      query.isEqual(filter);
+      return query;
+    });
+    
+    handleViewChange(newQueryParams);
+  };
+
+  const handleStateLoad = (state: any) => {
+    try {
+      // Try to parse the query as base64 first
+        handleViewChange(state);
+    } catch (error) {
+      console.error('Error loading state:', error);
+    }
+  };
+
   const gridOptions: GridOptions = {
-    columnDefs,
-    rowData,
-    onGridReady,
+    rowData: data,
+    columnDefs: view.columnDefs,
     pagination: true,
     paginationPageSize: pageSize,
-    rowModelType: 'infinite',
-    rowSelection: 'multiple',
-    enableCellTextSelection: true,
-    ensureDomOrder: true,
-    suppressColumnVirtualisation: true,
-    theme: 'legacy',
-    domLayout: 'normal',
-    maxBlocksInCache: 1,
-    cacheBlockSize: pageSize,
-    infiniteInitialRowCount: totalCount,
-    maxConcurrentDatasourceRequests: 1,
-    components: {
-      BitwiseEnumEditor,
-      ReferenceCellEditor,
-      MultiReferenceCellEditor
-    },
     defaultColDef: {
       sortable: true,
-      filter: true,
-      resizable: true,
-      floatingFilter: true,
-      sortingOrder: ['asc', 'desc', null],
-      editable: true
+      filter: true
     },
-    suppressRowClickSelection: true,
-    suppressCellFocus: false,
-    suppressRowVirtualisation: true,
-    datasource: {
-      getRows: (params) => {
-        const page = params.startRow / pageSize;
-        onPageChange(page + 1);
-        params.successCallback(data, totalCount);
+    theme: 'legacy',
+    onPaginationChanged: handlePaginationChanged,
+    onSortChanged,
+    onFilterChanged,
+    onCellValueChanged: (event: any) => {
+      if (onDataChange) {
+        const updatedData = [...data];
+        const index = updatedData.findIndex(row => row.id === event.data.id);
+        if (index !== -1) {
+          updatedData[index] = { ...updatedData[index], [event.colDef.field]: event.newValue };
+          onDataChange(updatedData);
+        }
       }
+    },
+    components: {
+      bitwiseEnumEditor: BitwiseEnumEditor,
+      referenceEditor: ReferenceCellEditor,
+      multiReferenceEditor: MultiReferenceCellEditor
     }
   };
 
   return (
     <div className="flex flex-col h-full w-full">
-      <ColumnManagementBar
-        columns={columnConfigs}
-        onColumnChange={handleColumnChange}
-      />
+      {entityDef && (
+        <ColumnManagementBar
+          columns={view.columnDefs.map(col => {
+            const property = propertyDefs.find(p => p.name === col.field);
+            if (property) {
+              return {
+                property,
+                visible: !col.hide,
+                path: col.field as string
+              };
+            }
+            const defaultProperty: GsbProperty = {
+              name: col.field as string,
+              title: col.headerName as string,
+              definition: {
+                id: col.field as string,
+                name: col.field as string,
+                title: col.headerName as string,
+                dataType: DataType.StringUnicode
+              }
+            };
+            return {
+              property: defaultProperty,
+              visible: !col.hide,
+              path: col.field as string
+            };
+          })}
+          onColumnChange={(changes) => {
+            const columnChanges = changes.map(change => ({
+              visible: change.visible,
+              propertyName: change.property.name || ''
+            }));
+            const newView = GsbGridUtils.updateViewFromColumnChanges(view.queryParams, columnChanges);
+            handleViewChange(newView);
+          }}
+          entityDef={entityDef}
+          onStateLoad={handleStateLoad}
+        />
+      )}
       <div className="ag-theme-alpine flex-grow w-full overflow-auto" style={{ height: 'calc(100vh - 200px)' }}>
         <AgGridReact
           {...gridOptions}
+          onGridReady={onGridReady}
           className="h-full w-full"
         />
       </div>

@@ -5,6 +5,7 @@ import { SingleQuery, QueryFunction, QueryRelation, QueryType } from '../../type
 import { getGsbToken, getGsbTenantCode } from '../../config/gsb-config';
 import { GsbSaveRequest } from '../../types/requests';
 import { GsbCacheService } from '../cache/gsb-cache.service';
+import { GsbUserQuery } from '@/components/gsb/column-management-bar';
 
 export interface DataTableQueryOptions {
   page?: number;
@@ -59,7 +60,7 @@ export class GsbDataTableService {
     options: DataTableQueryOptions = {}
   ): Promise<DataTableResponse> {
     try {
-      const {
+      let {
         page = 1,
         pageSize = 10,
         searchQuery,
@@ -68,6 +69,13 @@ export class GsbDataTableService {
         filters
       } = options;
 
+      if(page < 1) {
+        page = 1;
+      }
+      if(pageSize < 1) {
+        pageSize = 10;
+      }
+      
       // Get entity definition
       const { entityDef } = await this.getEntityDefinition(entityDefName);
       
@@ -163,6 +171,74 @@ export class GsbDataTableService {
       return await this.entityService.delete(deleteRequest, token, tenantCode);
     } catch (error) {
       console.error('Error deleting entities:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Save grid state
+   * @param entityDefId The entity definition id
+   * @param state The grid state to save
+   * @param title The title for the saved view
+   * @returns Promise with save response
+   */
+  async saveGridState(entityDefId: string, state: any, title: string) {
+    try {
+      
+      const saveRequest: GsbSaveRequest = {
+        entDefName: 'GsbUserQuery',
+        entity: {
+          title,
+          query: JSON.stringify(state),
+          type: 'grid_state',
+          entityDefinition_id: entityDefId,
+        }
+      };
+
+      return await this.entityService.save(saveRequest);
+    } catch (error) {
+      console.error('Error saving grid state:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Load grid states
+   * @param entityDefId The entity definition id
+   * @returns Promise with grid states
+   */
+  async loadGridStates(entityDefId: string) {
+    try {
+      
+      const queryParams = new QueryParams('GsbUserQuery');
+      queryParams.where('entityDefinition_id', entityDefId);
+      queryParams.queryType = QueryType.Full;
+
+      const response = await this.entityService.query(queryParams);
+      return response.entities || [];
+    } catch (error) {
+      console.error('Error loading grid states:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete grid state
+   * @param stateId The ID of the grid state to delete
+   * @returns Promise with delete response
+   */
+  async deleteGridState(stateId: string) {
+    try {
+      const { token, tenantCode } = await this.cacheService.getAuthParams();
+      
+      const deleteRequest: GsbSaveRequest = {
+        entDefName: 'GsbUserQuery',
+        entity: { ids: [stateId] }
+      };
+
+      return await this.entityService.delete(deleteRequest, token, tenantCode);
+    } catch (error) {
+      console.error('Error deleting grid state:', error);
       throw error;
     }
   }
