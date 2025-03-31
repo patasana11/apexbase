@@ -19,19 +19,19 @@ export class GsbSaveRequest {
 }
 
 export class GsbSaveMappedRequest {
-    entDefName: string = '';
-    entDefId: string = '';
-    entityDef: Record<string, any> = {};
-    items: any[] = [];
-    entityId: string = '';
-    propName: string | undefined;
+    entDefName?: string = '';
+    entDefId?: string = '';
+    entityDef?: Record<string, any> = {};
+    items?: any[] = [];
+    entityId?: string = '';
+    propName?: string | undefined;
 }
 
 export class GsbSaveMultiRequest {
-    entDefName = "";
-    entDefId = "";
-    entityDef = {};
-    entities = [];
+    entDefName?: string = '';
+    entDefId?: string = '';
+    entityDef?: Record<string, any> = {};
+    entities?: any[] = [];
 }
 
 export class GsbGetCodeRequest {

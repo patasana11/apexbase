@@ -3,13 +3,18 @@ import { GsbProperty, GsbPropertyDef, DataType, RefType } from '../models/gsb-en
 import { GsbEnum } from '../models/gsb-enum.model';
 
 export interface GridColumnConfig extends ColDef {
-  propertyName: string;
-  dataType: DataType;
-  isSystemColumn: boolean;
-  isReference: boolean;
-  isEnum: boolean;
-  isRequired: boolean;
-  orderNumber?: number;
+  context: {
+    propertyName: string;
+    dataType: DataType;
+    isSystemColumn: boolean;
+    isReference: boolean;
+    isEnum: boolean;
+    isRequired: boolean;
+    orderNumber?: number;
+    propertyDef: GsbPropertyDef;
+    isMultiple: boolean;
+    isSystem: boolean;
+  };
 }
 
 export class GsbGridUtils {
@@ -24,8 +29,6 @@ export class GsbGridUtils {
     return prop.isSystem || this.SYSTEM_COLUMNS.includes(prop.name);
   }
 
-
-
   public static createColumnDef(
     prop: GsbProperty,
     enumCache: Map<string, GsbEnum>
@@ -39,12 +42,18 @@ export class GsbGridUtils {
     const baseConfig: GridColumnConfig = {
       field: prop.name,
       headerName: prop.title,
-      propertyName: prop.name,
-      dataType: propDef.dataType,
-      isSystemColumn: this.isSystemColumn(prop),
-      isReference: propDef.dataType === DataType.Reference,
-      isEnum: propDef.dataType === DataType.Enum,
-      isRequired: prop.isRequired || false,
+      context: {
+        propertyName: prop.name,
+        dataType: propDef.dataType,
+        isSystemColumn: this.isSystemColumn(prop),
+        isReference: propDef.dataType === DataType.Reference,
+        isEnum: propDef.dataType === DataType.Enum,
+        isRequired: prop.isRequired || false,
+        orderNumber: prop.orderNumber,
+        propertyDef: propDef,
+        isMultiple: prop.isMultiple,
+        isSystem: prop.isSystem
+      },
       editable: !prop.isRequired && !this.isSystemColumn(prop),
       sortable: true,
       filter: true,
@@ -52,7 +61,6 @@ export class GsbGridUtils {
       floatingFilter: true,
       minWidth: 100,
       maxWidth: 300,
-      orderNumber: prop.orderNumber,
       // Add validation for required fields
       ...(prop.isRequired && {
         cellClass: 'required-field',
@@ -92,37 +100,27 @@ export class GsbGridUtils {
         // Bitwise enum configuration using custom editor component
         return {
           ...baseConfig,
-          // In AG Grid, when you pass a component directly like this, 
-          // it doesn't need to be registered via components property
-          cellEditor: 'BitwiseEnumEditor',  
+          cellEditor: 'BitwiseEnumEditor',
           cellEditorParams: {
             values: enumValues.map(v => v.value),
             labels: enumValues.map(v => v.title || v.value)
           },
-          valueFormatter: (params: any) => {
-            if (params.value === undefined || params.value === null) return '';
-            
-            // Show comma-separated list of selected values
-            const selectedValues = enumValues
-              .filter(v => (params.value & (v.value || 0)) === (v.value || 0))
-              .map(v => v.title)
-              .join(', ');
-            return selectedValues || params.value;
-          },
-          filter: 'agTextColumnFilter'
+          valueFormatter
         };
       } else {
-        // Single value enum configuration using community edition components
+        // Regular enum configuration
         return {
           ...baseConfig,
           cellEditor: 'agSelectCellEditor',
           cellEditorParams: {
             values: enumValues.map(v => v.value),
-            labels: enumValues.map(v => v.title || v.value)
+            cellRenderer: (params: any) => {
+              const value = params.value;
+              const label = valueLabelMap.get(value) || value;
+              return `<span>${label}</span>`;
+            }
           },
-          valueFormatter,
-          cellRenderer: valueFormatter,
-          filter: 'agTextColumnFilter'
+          valueFormatter
         };
       }
     }
@@ -131,98 +129,34 @@ export class GsbGridUtils {
     if (propDef.dataType === DataType.Reference) {
       return {
         ...baseConfig,
-        filter: 'agTextColumnFilter',
-        cellEditor: 'agSelectCellEditor',
-        cellRenderer: (params: any) => {
-          if (!params.value) return '';
-          if (Array.isArray(params.value)) {
-            return params.value.map((ref: any) => ref.title).join(', ');
-          }
-          return params.value.title || params.value;
-        }
-      };
-    }
-
-    // Handle numeric fields
-    if (propDef.dataType === DataType.Decimal || propDef.dataType === DataType.Int || propDef.dataType === DataType.Long) {
-      return {
-        ...baseConfig,
-        filter: 'agNumberColumnFilter',
-        minWidth: 120,
-        maxWidth: 150,
-        valueFormatter: (params: any) => {
-          if (params.value) {
-            return Number(params.value).toLocaleString(undefined, {
-              minimumFractionDigits: propDef.scale || 0,
-              maximumFractionDigits: propDef.scale || 0
-            });
-          }
-          return '';
-        }
-      };
-    }
-
-    // Handle date fields
-    if (propDef.dataType === DataType.DateTime) {
-      return {
-        ...baseConfig,
-        filter: 'agDateFilter',
-        cellEditor: 'agDateCellEditor',
-        minWidth: 150,
-        maxWidth: 180,
-        valueFormatter: (params: any) => {
-          if (params.value) {
-            return new Date(params.value).toLocaleDateString();
-          }
-          return '';
-        }
-      };
-    }
-
-    // Handle boolean fields
-    if (propDef.dataType === DataType.Bool) {
-      return {
-        ...baseConfig,
-        filter: 'agTextColumnFilter',
-        cellEditor: 'agCheckboxCellEditor',
-        minWidth: 100,
-        maxWidth: 100,
-        valueFormatter: (params: any) => {
-          return params.value ? 'Yes' : 'No';
-        }
-      };
-    }
-
-    // Handle text fields with max length
-    if (propDef.dataType === DataType.StringUnicode || propDef.dataType === DataType.StringASCII) {
-      return {
-        ...baseConfig,
-        filter: 'agTextColumnFilter',
-        cellEditor: 'agTextCellEditor',
-        minWidth: 150,
-        maxWidth: 300,
+        cellRenderer: 'ReferenceCellRenderer',
+        cellEditor: 'ReferenceCellEditor',
         cellEditorParams: {
-          maxLength: propDef.maxLength
+          propertyDef: propDef
         }
       };
     }
 
-    // Default to text column
-    return {
-      ...baseConfig,
-      filter: 'agTextColumnFilter'
-    };
+    // Handle multi-reference fields
+    if (propDef.dataType === DataType.Reference && prop.isMultiple) {
+      return {
+        ...baseConfig,
+        cellRenderer: 'MultiReferenceCellRenderer',
+        cellEditor: 'MultiReferenceCellEditor',
+        cellEditorParams: {
+          propertyDef: propDef
+        }
+      };
+    }
+
+    return baseConfig;
   }
 
   public static filterSystemColumns(columnDefs: GridColumnConfig[]): GridColumnConfig[] {
-    return columnDefs.filter(col => !col.isSystemColumn);
+    return columnDefs.filter(col => !col.context.isSystemColumn);
   }
 
   public static sortColumnsByOrder(columnDefs: GridColumnConfig[]): GridColumnConfig[] {
-    return [...columnDefs].sort((a, b) => {
-      const aOrder = a.orderNumber || 0;
-      const bOrder = b.orderNumber || 0;
-      return aOrder - bOrder;
-    });
+    return [...columnDefs].sort((a, b) => (a.context.orderNumber || 0) - (b.context.orderNumber || 0));
   }
 } 

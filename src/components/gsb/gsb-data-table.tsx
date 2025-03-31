@@ -38,6 +38,8 @@ import { GsbEnum } from '@/lib/gsb/models/gsb-enum.model';
 import { GsbUtils } from '@/lib/gsb/utils/gsb-utils';
 import { GridColumnConfig, GsbGridUtils } from '@/lib/gsb/utils/gsb-grid-utils';
 import BitwiseEnumEditor from './BitwiseEnumEditor';  // Import the custom editor
+import { GsbReference } from './GsbReference';
+import { GsbMultiReference } from './GsbMultiReference';
 
 // Import AG Grid styles - using only the new theme
 import 'ag-grid-community/styles/ag-grid.css';
@@ -79,6 +81,92 @@ interface GsbDataTableProps {
   onFilterChange?: (filters: Record<string, any>) => void;
 }
 
+// Custom cell renderer for reference fields
+const ReferenceCellRenderer = (props: ICellRendererParams) => {
+  const { value, data, colDef } = props;
+  const context = (colDef as any).context;
+
+  if (!context?.isReference) {
+    return <span>{value}</span>;
+  }
+
+  return (
+    <GsbReference
+      value={value}
+      parentEntityDefName={context.propertyDef.refEntDef_id}
+      propName={context.propertyDef.name}
+      disabled={true}
+    />
+  );
+};
+
+// Custom cell editor for reference fields
+const ReferenceCellEditor = (props: any) => {
+  const { value, data, colDef, stopEditing } = props;
+  const context = (colDef as any).context;
+
+  if (!context?.isReference) {
+    return null;
+  }
+
+  const handleChange = (newValue: string) => {
+    props.setValue(newValue);
+    stopEditing();
+  };
+
+  return (
+    <GsbReference
+      value={value}
+      onChange={handleChange}
+      parentEntityDefName={context.propertyDef.refEntDef_id}
+      propName={context.propertyDef.name}
+    />
+  );
+};
+
+// Custom cell renderer for multi-reference fields
+const MultiReferenceCellRenderer = (props: ICellRendererParams) => {
+  const { value, data, colDef } = props;
+  const context = (colDef as any).context;
+
+  if (!context?.isReference || !context.isMultiple) {
+    return <span>{value}</span>;
+  }
+
+  return (
+    <GsbMultiReference
+      values={value || []}
+      parentEntityDefName={context.propertyDef.refEntDef_id}
+      propName={context.propertyDef.name}
+      disabled={true}
+    />
+  );
+};
+
+// Custom cell editor for multi-reference fields
+const MultiReferenceCellEditor = (props: any) => {
+  const { value, data, colDef, stopEditing } = props;
+  const context = (colDef as any).context;
+
+  if (!context?.isReference || !context.isMultiple) {
+    return null;
+  }
+
+  const handleChange = (newValues: string[]) => {
+    props.setValue(newValues);
+    stopEditing();
+  };
+
+  return (
+    <GsbMultiReference
+      values={value || []}
+      onChange={handleChange}
+      parentEntityDefName={context.propertyDef.refEntDef_id}
+      propName={context.propertyDef.name}
+    />
+  );
+};
+
 export function GsbDataTable({ 
   entityDefName, 
   data, 
@@ -105,8 +193,8 @@ export function GsbDataTable({
 
     const newColumnDefs = propertyDefs
       .map(prop => GsbGridUtils.createColumnDef(prop, enumCache))
-      .filter(col => !col.isSystemColumn)
-      .sort((a, b) => (a.orderNumber || 0) - (b.orderNumber || 0));
+      .filter(col => !col.context.isSystemColumn)
+      .sort((a, b) => (a.context.orderNumber || 0) - (b.context.orderNumber || 0));
 
     setColumnDefs(newColumnDefs);
   }, [propertyDefs, enumCache]);
@@ -195,16 +283,38 @@ export function GsbDataTable({
     infiniteInitialRowCount: totalCount,
     maxConcurrentDatasourceRequests: 1,
     components: {
-      BitwiseEnumEditor: BitwiseEnumEditor,
+      BitwiseEnumEditor,
+      ReferenceCellRenderer,
+      ReferenceCellEditor,
+      MultiReferenceCellRenderer,
+      MultiReferenceCellEditor
     },
     defaultColDef: {
       sortable: true,
       filter: true,
       resizable: true,
       floatingFilter: true,
-      sortingOrder: ['asc', 'desc', null]
+      sortingOrder: ['asc', 'desc', null],
+      editable: true,
+      cellRenderer: (params: ICellRendererParams) => {
+        const context = (params.colDef as any).context;
+        
+        if (context?.isReference) {
+          return context.isMultiple ? 'MultiReferenceCellRenderer' : 'ReferenceCellRenderer';
+        }
+        
+        return undefined;
+      },
+      cellEditor: (params: ICellRendererParams) => {
+        const context = (params.colDef as any).context;
+        
+        if (context?.isReference) {
+          return context.isMultiple ? 'MultiReferenceCellEditor' : 'ReferenceCellEditor';
+        }
+        
+        return undefined;
+      }
     },
-    // Add these options for better scrolling behavior
     suppressRowClickSelection: true,
     suppressCellFocus: false,
     suppressRowVirtualisation: true,

@@ -5,6 +5,7 @@ import { getGsbToken, getGsbTenantCode, setGsbTenantCode } from '../../config/gs
 import { EntityQueryParams } from '../../types/query-params';
 import { QueryFunction, QueryType } from '../../types/query';
 import { getCurrentTenant } from '../../config/tenant-config';
+import { GsbEntity } from '../gsb-entity.service';
 
 interface CacheEntry<T> {
     data: T;
@@ -14,6 +15,8 @@ interface CacheEntry<T> {
 export class GsbCacheService {
     private static instance: GsbCacheService;
     private entityDefCache: Map<string, CacheEntry<GsbEntityDef>> = new Map();
+    private entityCache: Map<string, CacheEntry<any>> = new Map();
+    private baseUrl: string;
     private enumCache: Map<string, CacheEntry<GsbEnum>> = new Map();
     private propertyDefCache: Map<string, CacheEntry<GsbPropertyDef>> = new Map();
     private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
@@ -22,6 +25,7 @@ export class GsbCacheService {
 
     private constructor() {
         this.entityService = GsbEntityService.getInstance();
+        this.baseUrl = process.env.NEXT_PUBLIC_GSB_API_URL || '';
         // Initialize tenant code
         const currentTenant = getCurrentTenant();
         if (currentTenant) {
@@ -69,7 +73,7 @@ export class GsbCacheService {
         return propertyDefResponse.entities;
     }
 
-    public async getEntityDefWithPropertiesByName(name: string): Promise<{ entityDef: GsbEntityDef; propertyDefs: GsbProperty[] }> {
+    public async getEntityDefWithPropertiesByName(name: string): Promise<{ entityDef: GsbEntityDef; propertyDefs: GsbPropertyDef[] }> {
         try {
             // Check cache first
             const cached = this.entityDefCache.get(name);
@@ -89,23 +93,21 @@ export class GsbCacheService {
                 throw new Error('Entity definition not found');
             }
 
-            const entityDef :GsbEntityDef = entityDefResponse.entityDef;
+            const entityDef: GsbEntityDef = entityDefResponse.entityDef;
 
             // Fetch property definitions for each property
             if (entityDef.properties) {
-
                 const allPropertyDefs = await this.getPropertyDefs();
 
-                for(let prop of entityDef.properties) {
-
+                for (let prop of entityDef.properties) {
                     // Check cache first
                     const cachedDef = allPropertyDefs.find(p => p.id === prop.definition_id);
                     if (cachedDef) {
                         prop.definition = cachedDef;
-                    }
-                    else
+                    } else {
                         throw new Error(`Property definition not found for ${prop.name}`);
-                };
+                    }
+                }
             }
 
             // Cache the updated entity definition
@@ -119,6 +121,37 @@ export class GsbCacheService {
             console.error('Error fetching entity definition:', error);
             throw error;
         }
+    }
+
+    public async getEntityById(entityDefId: string, entityId: string): Promise<any> {
+        const cacheKey = `${entityDefId}:${entityId}`;
+        
+        // Check cache first
+        const cached = this.entityCache.get(cacheKey);
+        if (cached && Date.now() - cached.timestamp < this.CACHE_DURATION) {
+            return cached.data;
+        }
+
+        // Get auth params
+        const { token, tenantCode } = await this.getAuthParams();
+
+        // Fetch from API if not in cache
+        const entity = await this.entityService.getEntity({
+            entityDef: { id: entityDefId },
+            entity: { id: entityId }
+        }, token, tenantCode);
+
+        if (!entity) {
+            throw new Error('Entity not found');
+        }
+
+        // Cache the entity
+        this.entityCache.set(cacheKey, {
+            data: entity,
+            timestamp: Date.now()
+        });
+
+        return entity;
     }
 
     public async getEnum(id: string): Promise<GsbEnum | null> {
@@ -204,6 +237,7 @@ export class GsbCacheService {
 
     public clearCache(): void {
         this.entityDefCache.clear();
+        this.entityCache.clear();
         this.enumCache.clear();
         this.propertyDefCache.clear();
     }
