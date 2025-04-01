@@ -33,14 +33,30 @@ export class SortCol {
 }
 
 export enum QueryFunction {
-    Equals = 'equals',
-    Like = 'like',
-    Greater = 'greater',
-    Smaller = 'smaller',
-    Contains = 'contains',
-    In = 'in',
-    FullTextSearch = 'fullTextSearch',
-    Is = 'is'
+    Equals = 0,
+    Like = 1,
+    Greater = 2,
+    Smaller = 3,
+    BitwiseAnd = 5,
+    BitwiseOr = 6,
+    BitwiseXor = 7,
+    In = 8,
+    Is = 9,
+    FullTextSearch = 11,
+    Contains = 12,
+    ILike = 15,
+    RegexMatch = 16,
+    RegexMatchCaseInsensitive = 17,
+    IsNull = 18,
+    Between = 19,
+    PhraseSearch = 20,
+    GeometryOverlaps = 21,
+    PointInGeometry = 22,
+    GPSDistance = 23,
+    GPSWithinRadius = 24,
+    JsonContains = 25,
+    JsonHasKey = 26,
+    MatchArrays = 27
 }
 
 export enum QueryRelation {
@@ -138,6 +154,28 @@ export class SingleQuery {
     contains(value: any) {
         if (!this.val) this.val = new SelectCol();
         this.function = QueryFunction.Contains;
+        this.val.value = value;
+        return this;
+    }
+
+    bitwiseAnd(value: any) {
+        if (!this.val) this.val = new SelectCol();
+        this.function = QueryFunction.BitwiseAnd;
+        this.val.value = value;
+        return this;
+    }
+  
+
+    bitwiseOr(value: any) {
+        if (!this.val) this.val = new SelectCol();
+        this.function = QueryFunction.BitwiseOr;
+        this.val.value = value;
+        return this;
+    }
+
+    bitwiseXor(value: any) {
+        if (!this.val) this.val = new SelectCol();
+        this.function = QueryFunction.BitwiseXor;
         this.val.value = value;
         return this;
     }

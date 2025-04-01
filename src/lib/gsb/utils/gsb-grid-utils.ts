@@ -4,6 +4,10 @@ import { GsbEnum } from '../models/gsb-enum.model';
 import { QueryParams } from '../types/query-params';
 import { GsbCacheService } from '../services/cache/gsb-cache.service';
 import { BASE_PROPERTY_DEFINITIONS } from '../models/gsb-base-definitions';
+import { EnumFloatingFilterComponent } from '@/components/gsb/filters/EnumFilterComponent';
+import { EnumFilterComponent } from '@/components/gsb/filters/EnumFilterComponent';
+import { ReferenceFloatingFilterComponent } from '@/components/gsb/filters/ReferenceFilterComponent';
+import { ReferenceFilterComponent } from '@/components/gsb/filters/ReferenceFilterComponent';
 
 export interface GridColumnConfigContext {
   property?: GsbProperty;
@@ -172,7 +176,7 @@ export class GsbGridUtils {
           ...baseConfig,
           cellEditor: 'bitwiseEnumEditor',
           cellEditorPopup: true,
-          filter: 'enumFilter',
+          filter: EnumFilterComponent,
           filterParams: {
             values: enumValues.map(v => v.value),
             labels: enumValues.map(v => v.title || v.value),
@@ -188,13 +192,19 @@ export class GsbGridUtils {
               .map(v => v.title)
               .join(', ');
             return selectedValues || params.value;
+          },
+          floatingFilterComponent: EnumFloatingFilterComponent,
+          floatingFilterComponentParams: {
+            values: enumValues.map(v => v.value),
+            labels: enumValues.map(v => v.title || v.value),
+            isBitwise: true
           }
         };
       } else {
         return {
           ...baseConfig,
           cellEditor: 'agSelectCellEditor',
-          filter: 'enumFilter',
+          filter: EnumFilterComponent,
           filterParams: {
             values: enumValues.map(v => v.value),
             labels: enumValues.map(v => v.title || v.value),
@@ -210,6 +220,12 @@ export class GsbGridUtils {
           },
           valueFormatter: (params: any) => {
             return valueLabelMap.get(params.value) || params.value;
+          },
+          floatingFilterComponent: EnumFloatingFilterComponent,
+          floatingFilterComponentParams: {
+            values: enumValues.map(v => v.value),
+            labels: enumValues.map(v => v.title || v.value),
+            isBitwise: false
           }
         };
       }
@@ -222,7 +238,7 @@ export class GsbGridUtils {
           ...baseConfig,
           cellEditor: 'multiReferenceEditor',
           cellEditorPopup: true,
-          filter: 'referenceFilter',
+          filter: ReferenceFilterComponent,
           filterParams: {
             property: prop,
             propertyDef: propDef,
@@ -239,6 +255,12 @@ export class GsbGridUtils {
           },
           valueFormatter: (params: any) => {
             return params.value ? params.value.map((v: any) => v.title).join(', ') : '';
+          },
+          floatingFilterComponent: ReferenceFloatingFilterComponent,
+          floatingFilterComponentParams: {
+            property: prop,
+            entityDef: entityDef,
+            isMultiple: true
           }
         };
       } else {
@@ -246,7 +268,7 @@ export class GsbGridUtils {
           ...baseConfig,
           cellEditor: 'referenceEditor',
           cellEditorPopup: true,
-          filter: 'referenceFilter',
+          filter: ReferenceFilterComponent,
           filterParams: {
             property: prop,
             propertyDef: propDef,
@@ -263,6 +285,12 @@ export class GsbGridUtils {
           },
           valueFormatter: (params: any) => {
             return params.value ? params.value.title : '';
+          },
+          floatingFilterComponent: ReferenceFloatingFilterComponent,
+          floatingFilterComponentParams: {
+            property: prop,
+            entityDef: entityDef,
+            isMultiple: false
           }
         };
       }
@@ -619,5 +647,59 @@ export class GsbGridUtils {
 
   public static sortColumnsByOrder(columnDefs: GridColumnConfig[]): GridColumnConfig[] {
     return [...columnDefs].sort((a, b) => (a.context.orderNumber || 0) - (b.context.orderNumber || 0));
+  }
+
+  public static getColumnDefs(entityDef: GsbEntityDef): ColDef[] {
+    return entityDef.properties.map(prop => {
+      const colDef: ColDef = {
+        field: prop.name,
+        headerName: prop.title,
+        filter: true,
+        floatingFilter: true,
+        suppressHeaderFilterButton: true,
+        suppressFloatingFilterButton: true,
+        filterParams: {
+          // Add any common filter params here
+        }
+      };
+
+      // Handle different property types
+      switch (prop.type) {
+        case 'enum':
+          colDef.filter = EnumFilterComponent;
+          colDef.floatingFilterComponent = EnumFloatingFilterComponent;
+          colDef.filterParams = {
+            values: prop.enumValues || [],
+            labels: prop.enumLabels || [],
+            isBitwise: prop.isBitwise || false
+          };
+          colDef.floatingFilterComponentParams = {
+            values: prop.enumValues || [],
+            labels: prop.enumLabels || [],
+            isBitwise: prop.isBitwise || false
+          };
+          break;
+
+        case 'reference':
+          colDef.filter = ReferenceFilterComponent;
+          colDef.floatingFilterComponent = ReferenceFloatingFilterComponent;
+          colDef.filterParams = {
+            property: prop,
+            propertyDef: prop,
+            entityDef: prop.referenceEntityDef || entityDef,
+            isMultiple: prop.isMultiple || false
+          };
+          colDef.floatingFilterComponentParams = {
+            property: prop,
+            entityDef: prop.referenceEntityDef || entityDef,
+            isMultiple: prop.isMultiple || false
+          };
+          break;
+
+        // ... rest of the cases ...
+      }
+
+      return colDef;
+    });
   }
 } 

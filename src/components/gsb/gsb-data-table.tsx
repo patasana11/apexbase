@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useMemo, forwardRef, useCallback } from 'react';
 import { AgGridReact } from 'ag-grid-react';
-import { 
-  GridOptions, 
-  GridApi, 
+import {
+  GridOptions,
+  GridApi,
   GetContextMenuItemsParams,
   GridReadyEvent,
   ICellRendererParams,
@@ -49,7 +49,7 @@ import { GsbReference } from './GsbReference';
 import { GsbMultiReference } from './GsbMultiReference';
 import { ColumnManagementBar } from './column-management-bar';
 import { QueryParams } from '@/lib/gsb/types/query-params';
-import { SingleQuery, QueryFunction } from '@/lib/gsb/types/query';
+import { SingleQuery, QueryFunction, QueryRelation } from '@/lib/gsb/types/query';
 import { GsbDataTableService } from '@/lib/gsb/services/entity/gsb-data-table.service';
 import { GsbEntityService } from '@/lib/gsb/services/entity/gsb-entity.service';
 import { useTheme } from 'next-themes';
@@ -58,6 +58,7 @@ import { ReferenceFilterComponent } from './filters/ReferenceFilterComponent';
 // Import AG Grid styles for legacy theme
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
+import { filter, isObject } from 'lodash';
 
 // Register required modules
 ModuleRegistry.registerModules([
@@ -108,7 +109,7 @@ interface ColumnConfig {
 // Custom cell editor for reference fields
 const ReferenceCellEditor = forwardRef((props: any, ref) => {
   const { value, data, colDef, stopEditing } = props;
-  const context : GridColumnConfigContext = (colDef as any).context;
+  const context: GridColumnConfigContext = (colDef as any).context;
 
   if (!context?.entityDef || !context?.propertyDef) {
     console.error('Missing required context for ReferenceCellEditor');
@@ -158,7 +159,7 @@ const MultiReferenceCellEditor = forwardRef((props: any, ref) => {
   );
 });
 
-export function GsbDataTable({ 
+export function GsbDataTable({
   entityDefName,
   view: initialView,
   onViewChange,
@@ -197,7 +198,7 @@ export function GsbDataTable({
       queryParams: newQueryParams,
       columnDefs: newColumnDefs
     };
-    
+
     setView(newView);
     onViewChange?.(newQueryParams);
   }, [page, pageSize, entityDef, onViewChange]);
@@ -208,26 +209,20 @@ export function GsbDataTable({
       try {
         const { startRow, endRow } = params;
         const currentPage = Math.floor(startRow / pageSize) + 1;
-        
+
+        const queryParams = new QueryParams(entityDefName);
+        Object.assign(queryParams, view?.queryParams);
+        queryParams.startIndex = startRow;
+        queryParams.count = endRow - startRow;
+        queryParams.calcTotalCount = true;
         // Create query options from current view
-        const options = {
-          page: currentPage,
-          pageSize: endRow - startRow,
-          sortField: view?.queryParams?.sortCols?.[0]?.col?.name,
-          sortDirection: view?.queryParams?.sortCols?.[0]?.sortType as 'ASC' | 'DESC',
-          filters: view?.queryParams?.query?.reduce((acc: Record<string, any>, query: SingleQuery) => {
-            if (query.col?.name && query.val?.value !== undefined) {
-              acc[query.col.name] = query.val.value;
-            }
-            return acc;
-          }, {})
-        };
-        
+
+
         // Fetch data
-        const response = await gsbDataTableService.queryEntities(entityDefName, options);
-        
+        const response = await GsbEntityService.getInstance().query(queryParams);
+
         // Return data to grid
-        params.successCallback(response.data, response.totalCount);
+        params.successCallback(response.entities || [], response.totalCount);
       } catch (error) {
         console.error('Error fetching data:', error);
         params.failCallback();
@@ -238,30 +233,155 @@ export function GsbDataTable({
   // Handle filter changes
   const onFilterChanged = useCallback(async (event: FilterChangedEvent) => {
     if (!view || !entityDef) return;
-    
-    const filterModel = event.api.getFilterModel();
+
+    const apiFilterModel = event.api.getFilterModel();
     const newQueryParams = new QueryParams(entityDefName);
+
     Object.assign(newQueryParams, view.queryParams);
-    
-    // Update query params with new filters
-    newQueryParams.query = Object.entries(filterModel).map(([field, filter]: [string, any]) => {
-      const query = new SingleQuery(field);
-      
-      if (filter.type === 'enum') {
-        query.in(filter.values);
-      } else if (filter.type === 'reference') {
-        query.in(filter.refs);
-      } else if (filter.type === 'contains') {
-        query.contains(filter.filter);
-      } else if (filter.type === 'equals') {
-        query.isEqual(filter.filter);
-      } else {
-        query.isEqual(filter.filter);
+
+    newQueryParams.query = [];
+    for (const filterName  of Object.keys(apiFilterModel)) {
+      const filterModel = apiFilterModel[filterName];
+      let property: GsbProperty | undefined = filterModel.colDef?.context?.property;
+      if(!property) 
+        property = entityDef?.properties?.find(p => p.name === filterName) ;
+      if(!property) continue;
+
+      const value = filterModel.filter;
+
+
+      if (!value
+        || Array.isArray(value) && !value.length
+        || isObject(value) && !Object.keys(value).length
+      ) {
+        await handleViewChange(newQueryParams);
+        return;
       }
-      
-      return query;
-    });
-    
+
+      const colType: DataType = property?.definition?.dataType || DataType.StringUnicode;
+      const isMultiple = property?.isMultiple;
+
+      const newQuery = new SingleQuery(filterName);
+      newQuery.name = filterName;
+      if (isMultiple) {
+        if (colType === DataType.Enum) {
+          const bitwiseValue = value.reduce((acc: number, v: any) => acc | v, 0);
+          newQuery.bitwiseAnd(bitwiseValue);
+
+        } else if(colType === DataType.Reference){
+          newQuery.contains(Array.isArray(value) ? value : [value]);
+        }
+      } else {
+        if (Array.isArray(value)) {
+          if (colType === DataType.Enum) {
+            delete newQuery.col;
+            delete newQuery.val;
+            newQuery.children = value.map((v: any) => {
+              const ret = new SingleQuery(filterName, v);
+              ret.relation = QueryRelation.Or;
+              return ret;
+            });
+          } else {
+            newQuery.in(value);
+          }
+        }
+      }
+
+      if(!newQuery.val?.value){
+        switch(filterModel.type){
+          // Text Filters
+          case 'contains':
+            newQuery.isLike(value);
+            break;
+          case 'equals':
+            newQuery.isEqual(value);
+            break;
+          case 'notEqual':
+            newQuery.isEqual(value).not();
+            break;
+          case 'startsWith':
+            newQuery.isLike(value + '%');
+            break;
+          case 'endsWith':
+            newQuery.isLike('%' + value);
+            break;
+          case 'blank':
+            newQuery.funcVal(QueryFunction.IsNull, null);
+            break;
+          case 'notBlank':
+            newQuery.funcVal(QueryFunction.IsNull, null).not();
+            break;
+
+          // Number Filters
+          case 'greaterThan':
+            newQuery.isGreater(value);
+            break;
+          case 'lessThan':
+            newQuery.isSmaller(value);
+            break;
+          case 'greaterThanOrEqual':
+            newQuery.isGreater(value);
+            break;
+          case 'lessThanOrEqual':
+            newQuery.isSmaller(value);
+            break;
+          case 'inRange':
+            newQuery.funcVal(QueryFunction.Between, value);
+            break;
+
+          // Date Filters
+          case 'dateEquals':
+            newQuery.isEqual(value);
+            break;
+          case 'dateNotEqual':
+            newQuery.isEqual(value).not();
+            break;
+          case 'dateBefore':
+            newQuery.isSmaller(value);
+            break;
+          case 'dateAfter':
+            newQuery.isGreater(value);
+            break;
+          case 'dateBetween':
+            newQuery.funcVal(QueryFunction.Between, value);
+            break;
+
+          // Set Filters
+          case 'in':
+            newQuery.funcVal(QueryFunction.In, value);
+            break;
+          case 'notIn':
+            newQuery.funcVal(QueryFunction.In, value).not();
+            break;
+
+          // Advanced Filters
+          case 'regexMatch':
+            newQuery.funcVal(QueryFunction.RegexMatch, value);
+            break;
+          case 'regexMatchCaseInsensitive':
+            newQuery.funcVal(QueryFunction.RegexMatchCaseInsensitive, value);
+            break;
+          case 'fullTextSearch':
+            newQuery.funcVal(QueryFunction.FullTextSearch, value);
+            break;
+          case 'phraseSearch':
+            newQuery.funcVal(QueryFunction.PhraseSearch, value);
+            break;
+          case 'iLike':
+            newQuery.funcVal(QueryFunction.ILike, value);
+            break;
+
+          // Default case
+          default:
+            // Default to contains if type is not recognized
+            newQuery.isLike(value);
+            break;
+        }
+      }
+
+      newQueryParams.query.push(newQuery);
+    }
+
     // Update view and trigger change
     await handleViewChange(newQueryParams);
   }, [entityDefName, view, entityDef, handleViewChange]);
@@ -269,12 +389,12 @@ export function GsbDataTable({
   // Handle grid ready
   const onGridReady = useCallback((params: GridReadyEvent) => {
     setGridApi(params.api);
-    
+
     // Set datasource immediately when grid is ready
     if ('setDatasource' in params.api) {
       (params.api as any).setDatasource(dataSource);
     }
-    
+
     // Apply column state if available
     if (columnDefs?.length) {
       const columnState = columnDefs.map(col => ({
@@ -348,7 +468,7 @@ export function GsbDataTable({
   useEffect(() => {
     const updateView = async () => {
       if (!view || !entityDef) return;
-      
+
       const newColumnDefs = await GsbGridUtils.createColumnDefsFromView(view.queryParams, entityDef);
       setColumnDefs(newColumnDefs);
     };
@@ -359,10 +479,10 @@ export function GsbDataTable({
   // Handle column visibility changes
   const handleColumnVisibilityChanged = useCallback(async (changes: { visible?: boolean; propertyName: string }[]) => {
     if (!view || !entityDef) return;
-    
+
     const updatedQueryParams = GsbGridUtils.updateViewFromColumnChanges(view.queryParams, changes);
     const newColumnDefs = await GsbGridUtils.createColumnDefsFromView(updatedQueryParams, entityDef);
-    
+
     setView(prev => prev ? {
       ...prev,
       queryParams: updatedQueryParams,
@@ -373,10 +493,10 @@ export function GsbDataTable({
   // Handle column order changes
   const handleColumnOrderChanged = useCallback(async (changes: { propertyName: string; orderNumber: number }[]) => {
     if (!view || !entityDef) return;
-    
+
     const updatedQueryParams = GsbGridUtils.updateViewFromColumnChanges(view.queryParams, changes);
     const newColumnDefs = await GsbGridUtils.createColumnDefsFromView(updatedQueryParams, entityDef);
-    
+
     setView(prev => prev ? {
       ...prev,
       queryParams: updatedQueryParams,
@@ -387,25 +507,25 @@ export function GsbDataTable({
   // Handle sort changes
   const onSortChanged = useCallback(async (event: SortChangedEvent) => {
     if (!view || !entityDef) return;
-    
+
     const columnDefs = event.api.getColumnDefs() as ColDef[];
     const newQueryParams = new QueryParams(entityDefName);
     Object.assign(newQueryParams, view.queryParams);
-    
+
     newQueryParams.sortCols = columnDefs
       .filter(col => col.sort)
       .map(col => ({
         col: { name: col.field as string },
         sortType: col.sort as 'ASC' | 'DESC'
       }));
-    
+
     await handleViewChange(newQueryParams);
   }, [entityDefName, view, entityDef, handleViewChange]);
 
   const handleStateLoad = (state: any) => {
     try {
       // Try to parse the query as base64 first
-        handleViewChange(state);
+      handleViewChange(state);
     } catch (error) {
       console.error('Error loading state:', error);
     }
@@ -433,7 +553,7 @@ export function GsbDataTable({
     onPaginationChanged: (event: any) => {
       const newPage = event.api.paginationGetCurrentPage();
       const newPageSize = event.api.paginationGetPageSize();
-      
+
       // Update pagination without triggering view changes
       onPageChange(newPage);
       onPageSizeChange(newPageSize);
@@ -473,8 +593,8 @@ export function GsbDataTable({
           onStateLoad={handleStateLoad}
         />
       )}
-      <div 
-        className={`ag-theme-${resolvedTheme === 'dark' ? 'alpine-dark' : 'alpine'} flex-grow w-full overflow-auto`} 
+      <div
+        className={`ag-theme-${resolvedTheme === 'dark' ? 'alpine-dark' : 'alpine'} flex-grow w-full overflow-auto`}
         style={{ height: 'calc(100vh - 200px)' }}
       >
         <AgGridReact

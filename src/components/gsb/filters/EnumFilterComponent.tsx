@@ -1,14 +1,78 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
-import { IFilterParams, IDoesFilterPassParams } from 'ag-grid-community';
+import { IFilterParams, IDoesFilterPassParams, IFloatingFilterComp, IFloatingFilterParams } from 'ag-grid-community';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
+import { Input } from '@/components/ui/input';
 
 interface EnumFilterProps extends IFilterParams {
   values: string[];
   labels: string[];
   isBitwise: boolean;
+  filterModel?: {
+    values: string[];
+    type: 'enum';
+    operator: 'OR';
+  };
+}
+
+export class EnumFloatingFilterComponent implements IFloatingFilterComp {
+  private eGui: HTMLDivElement;
+  private currentValues: string[] = [];
+  private params: IFloatingFilterParams;
+  private values: string[] = [];
+  private labels: string[] = [];
+  private isBitwise: boolean = false;
+  private eFilterInput: HTMLInputElement;
+
+  constructor() {
+    this.eGui = document.createElement('div');
+    this.eGui.className = 'ag-floating-filter-input';
+    this.eGui.innerHTML = `
+      <input type="text" class="ag-input-field-input" placeholder="Select values..." readonly />
+    `;
+    this.eFilterInput = this.eGui.querySelector('input')!;
+  }
+
+  init(params: IFloatingFilterParams) {
+    this.params = params;
+    
+    // Get values and labels from floatingFilterComponentParams
+    const componentParams = params.floatingFilterComponentParams as { values: string[]; labels: string[]; isBitwise: boolean };
+    if (componentParams) {
+      this.values = componentParams.values || [];
+      this.labels = componentParams.labels || [];
+      this.isBitwise = componentParams.isBitwise || false;
+    }
+
+    this.eFilterInput.addEventListener('click', () => {
+      // Show the filter popup
+      params.showParentFilter();
+    });
+  }
+
+  onParentModelChanged(parentModel: any) {
+    if (!parentModel) {
+      this.currentValues = [];
+      this.eFilterInput.value = '';
+    } else {
+      this.currentValues = parentModel.values || [];
+      // Show selected values in the input
+      this.eFilterInput.value = this.currentValues
+        .map((value: string) => this.labels[this.values.indexOf(value)])
+        .filter(Boolean)
+        .join(', ');
+    }
+  }
+
+  getGui() {
+    return this.eGui;
+  }
+
+  destroy() {
+    // Cleanup if needed
+  }
 }
 
 export const EnumFilterComponent = forwardRef((props: EnumFilterProps, ref) => {
@@ -30,9 +94,8 @@ export const EnumFilterComponent = forwardRef((props: EnumFilterProps, ref) => {
     
     // Create filter model
     const filterModel = {
-      type: 'enum',
-      values: newValues,
-      operator: 'OR'
+      filter: newValues,
+      colDef : props.colDef
     };
 
     // Call the filter changed callback if it exists
@@ -43,7 +106,10 @@ export const EnumFilterComponent = forwardRef((props: EnumFilterProps, ref) => {
     // Update the filter model in AG Grid
     if (props.api && props.colDef.field) {
       props.api.setColumnFilterModel(props.colDef.field, filterModel);
+      // Force grid to refresh
+      props.api.onFilterChanged();
     }
+
   };
 
   // Implement AG Grid's filter interface
@@ -92,12 +158,12 @@ export const EnumFilterComponent = forwardRef((props: EnumFilterProps, ref) => {
     <div className="p-4 space-y-4">
       <div className="space-y-2">
         <Label>Filter by {props.isBitwise ? 'Flags' : 'Values'}</Label>
-        <input
+        <Input
           type="text"
           placeholder="Search..."
           value={searchText}
           onChange={(e) => setSearchText(e.target.value)}
-          className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full"
         />
       </div>
 
