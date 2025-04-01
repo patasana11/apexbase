@@ -182,6 +182,7 @@ export class GsbGridUtils {
         return {
           ...baseConfig,
           cellEditor: 'bitwiseEnumEditor',
+          cellEditorPopup: true,
           cellEditorParams: {
             values: enumValues.map(v => v.value),
             labels: enumValues.map(v => v.title || v.value)
@@ -212,6 +213,7 @@ export class GsbGridUtils {
         return {
           ...baseConfig,
           cellEditor: 'multiReferenceEditor',
+          cellEditorPopup: true,
           context: {
             ...baseConfig.context,
             isReference: true,
@@ -228,6 +230,7 @@ export class GsbGridUtils {
         return {
           ...baseConfig,
           cellEditor: 'referenceEditor',
+          cellEditorPopup: true,
           context: {
             ...baseConfig.context,
             isReference: true,

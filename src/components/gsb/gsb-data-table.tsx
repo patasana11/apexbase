@@ -47,6 +47,7 @@ import { GsbMultiReference } from './GsbMultiReference';
 import { ColumnManagementBar } from './column-management-bar';
 import { QueryParams } from '@/lib/gsb/types/query-params';
 import { SingleQuery, QueryFunction } from '@/lib/gsb/types/query';
+import { GsbDataTableService } from '@/lib/gsb/services/entity/gsb-data-table.service';
 
 // Import AG Grid styles for legacy theme
 import 'ag-grid-community/styles/ag-grid.css';
@@ -177,6 +178,11 @@ export function GsbDataTable({
     }
     return GsbGridUtils.createDefaultView(entityDef || {}, propertyDefs, enumCache);
   });
+  const [rowData, setRowData] = useState<any[]>(data);
+  const [totalRows, setTotalRows] = useState<number>(totalCount);
+  const [columnDefs, setColumnDefs] = useState<ColDef[]>(view.columnDefs);
+
+  const gsbDataTableService = GsbDataTableService.getInstance();
 
   // Load entity definition and properties
   useEffect(() => {
@@ -209,89 +215,116 @@ export function GsbDataTable({
     loadEntityDef();
   }, [entityDefName]);
 
-  // Update view when entityDef or propertyDefs change
+  // Initialize view
   useEffect(() => {
-    if (!entityDef || !propertyDefs.length) return;
-    
-    if (!initialView) {
-      const defaultView = GsbGridUtils.createDefaultView(entityDef, propertyDefs, enumCache);
-      // Initialize pagination parameters
-      defaultView.queryParams.startIndex = 0;
-      defaultView.queryParams.count = pageSize;
+    if (!entityDef?.properties?.length) return;
+
+    // Create default view if we don't have one
+    if (!view || !view.columnDefs?.length) {
+      const defaultView = GsbGridUtils.createDefaultView(entityDef, entityDef.properties, enumCache);
       setView(defaultView);
-    } else {
-      // Update column definitions with editors for the initial view
-      const updatedColumnDefs = GsbGridUtils.createColumnDefsFromView(initialView, entityDef, enumCache);
-      setView(prev => ({
-        ...prev,
-        columnDefs: updatedColumnDefs
-      }));
+      setColumnDefs(defaultView.columnDefs);
     }
-  }, [entityDef, propertyDefs, enumCache, initialView, pageSize]);
+  }, [entityDef, enumCache]);
+
+  // Handle pagination changes
+  const handlePaginationChanged = useCallback((event: any) => {
+    const newPage = event.api.paginationGetCurrentPage();
+    const newPageSize = event.api.paginationGetPageSize();
+    
+    // Update pagination without triggering view changes
+    onPageChange(newPage);
+    onPageSizeChange(newPageSize);
+  }, [onPageChange, onPageSizeChange]);
+
+  // Load data when pagination or view changes
+  useEffect(() => {
+    if (!entityDef?.properties?.length || !view) return;
+
+    const loadDataWithView = async () => {
+      try {
+        const response = await gsbDataTableService.queryEntities(entityDefName, {
+          page: Math.floor((view.queryParams.startIndex || 0) / pageSize) + 1,
+          pageSize,
+          sortField: view.queryParams.sortCols?.[0]?.col?.name,
+          sortDirection: view.queryParams.sortCols?.[0]?.sortType as 'ASC' | 'DESC' | undefined,
+          filters: view.queryParams.filter ? JSON.parse(view.queryParams.filter) : undefined
+        });
+        setRowData(response.data);
+        setTotalRows(response.totalCount);
+      } catch (error) {
+        console.error('Error loading data:', error);
+      }
+    };
+
+    loadDataWithView();
+  }, [entityDefName, page, pageSize, view.queryParams]);
+
+  // Handle view changes
+  useEffect(() => {
+    if (!view || !entityDef) return;
+    
+    // Update column definitions when view changes
+    const newColumnDefs = GsbGridUtils.createColumnDefsFromView(view.queryParams, entityDef, enumCache);
+    setColumnDefs(newColumnDefs);
+  }, [view.queryParams, entityDef, enumCache]);
+
+  // Handle column visibility changes
+  const handleColumnVisibilityChanged = useCallback((changes: { visible?: boolean; propertyName: string }[]) => {
+    if (!view) return;
+    
+    const updatedQueryParams = GsbGridUtils.updateViewFromColumnChanges(view.queryParams, changes);
+    setView(prev => ({
+      ...prev,
+      queryParams: updatedQueryParams
+    }));
+  }, [view]);
+
+  // Handle column order changes
+  const handleColumnOrderChanged = useCallback((changes: { propertyName: string; orderNumber: number }[]) => {
+    if (!view) return;
+    
+    const updatedQueryParams = GsbGridUtils.updateViewFromColumnChanges(view.queryParams, changes);
+    setView(prev => ({
+      ...prev,
+      queryParams: updatedQueryParams
+    }));
+  }, [view]);
 
   // Handle view changes from ColumnManagementBar
-  const handleViewChange = (newQueryParams: QueryParams<any>) => {
+  const handleViewChange = useCallback((newQueryParams: QueryParams<any>) => {
+    if (!entityDef) return;
+
     // Ensure startIndex is non-negative
     newQueryParams.startIndex = Math.max(0, (page - 1) * pageSize);
     newQueryParams.count = pageSize;
 
     const newView = {
       queryParams: newQueryParams,
-      columnDefs: GsbGridUtils.createColumnDefsFromView(newQueryParams, entityDef || {}, enumCache)
+      columnDefs: GsbGridUtils.createColumnDefsFromView(newQueryParams, entityDef, enumCache)
     };
     setView(newView);
     onViewChange?.(newQueryParams);
-  };
+  }, [page, pageSize, entityDef, enumCache, onViewChange]);
 
-  // Handle pagination changes
-  const handlePaginationChanged = (event: any) => {
-    const newPage = event.api.paginationGetCurrentPage();
-    const newPageSize = event.api.paginationGetPageSize();
-    
-    // Create a new QueryParams instance to ensure we have all required methods
+  // Handle sort changes
+  const onSortChanged = useCallback((event: SortChangedEvent) => {
+    const columnDefs = event.api.getColumnDefs() as ColDef[];
     const newQueryParams = new QueryParams(entityDefName);
     Object.assign(newQueryParams, view.queryParams);
     
-    // Calculate startIndex ensuring it's non-negative
-    newQueryParams.startIndex = Math.max(0, newPage * newPageSize);
-    newQueryParams.count = newPageSize;
-    
-    handleViewChange(newQueryParams);
-    onPageChange(newPage);
-    onPageSizeChange(newPageSize);
-  };
-
-  // Handle grid events
-  const onGridReady = (params: GridReadyEvent) => {
-    setGridApi(params.api);
-    if (view.columnDefs) {
-      const columnState = view.columnDefs.map(col => ({
-        colId: col.field as string,
-        hide: col.hide,
-        sort: col.sort,
-        width: col.width,
-        pinned: col.pinned
-      }));
-      params.api.applyColumnState({
-        state: columnState,
-        applyOrder: true
-      });
-    }
-  };
-
-  const onSortChanged = (event: SortChangedEvent) => {
-    const columnDefs = event.api.getColumnDefs() as ColDef[];
-    const newView = { ...view };
-    newView.queryParams.sortCols = columnDefs
+    newQueryParams.sortCols = columnDefs
       .filter(col => col.sort)
       .map(col => ({
         col: { name: col.field as string },
         sortType: col.sort as 'ASC' | 'DESC'
       }));
-    handleViewChange(newView.queryParams);
-  };
+    
+    handleViewChange(newQueryParams);
+  }, [entityDefName, view.queryParams, handleViewChange]);
 
-  const onFilterChanged = (event: FilterChangedEvent) => {
+  // Handle filter changes
+  const onFilterChanged = useCallback((event: FilterChangedEvent) => {
     const filterModel = event.api.getFilterModel() as FilterModel;
     const newQueryParams = new QueryParams(entityDefName);
     Object.assign(newQueryParams, view.queryParams);
@@ -303,7 +336,25 @@ export function GsbDataTable({
     });
     
     handleViewChange(newQueryParams);
-  };
+  }, [entityDefName, view.queryParams, handleViewChange]);
+
+  // Handle grid ready
+  const onGridReady = useCallback((params: GridReadyEvent) => {
+    setGridApi(params.api);
+    if (columnDefs?.length) {
+      const columnState = columnDefs.map(col => ({
+        colId: col.field as string,
+        hide: col.hide,
+        sort: col.sort,
+        width: col.width,
+        pinned: col.pinned
+      }));
+      params.api.applyColumnState({
+        state: columnState,
+        applyOrder: true
+      });
+    }
+  }, [columnDefs]);
 
   const handleStateLoad = (state: any) => {
     try {
@@ -315,8 +366,8 @@ export function GsbDataTable({
   };
 
   const gridOptions: GridOptions = {
-    rowData: data,
-    columnDefs: view.columnDefs,
+    rowData: rowData,
+    columnDefs: columnDefs,
     pagination: true,
     paginationPageSize: pageSize,
     defaultColDef: {
@@ -329,7 +380,7 @@ export function GsbDataTable({
     onFilterChanged,
     onCellValueChanged: (event: any) => {
       if (onDataChange) {
-        const updatedData = [...data];
+        const updatedData = [...rowData];
         const index = updatedData.findIndex(row => row.id === event.data.id);
         if (index !== -1) {
           updatedData[index] = { ...updatedData[index], [event.colDef.field]: event.newValue };
@@ -341,7 +392,8 @@ export function GsbDataTable({
       bitwiseEnumEditor: BitwiseEnumEditor,
       referenceEditor: ReferenceCellEditor,
       multiReferenceEditor: MultiReferenceCellEditor
-    }
+    },
+    onGridReady
   };
 
   return (
@@ -388,7 +440,6 @@ export function GsbDataTable({
       <div className="ag-theme-alpine flex-grow w-full overflow-auto" style={{ height: 'calc(100vh - 200px)' }}>
         <AgGridReact
           {...gridOptions}
-          onGridReady={onGridReady}
           className="h-full w-full"
         />
       </div>

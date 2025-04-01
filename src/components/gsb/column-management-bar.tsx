@@ -42,6 +42,9 @@ interface ColumnConfig {
   property: GsbProperty;
   visible: boolean;
   path?: string;
+  isReference?: boolean;
+  children?: ColumnConfig[];
+  expanded?: boolean;
 }
 
 interface ColumnManagementBarProps {
@@ -71,12 +74,11 @@ export function ColumnManagementBar({
   const [showColumnSelector, setShowColumnSelector] = useState(false);
   const [sheetSearchQuery, setSheetSearchQuery] = useState('');
   const [expandedRefs, setExpandedRefs] = useState<Set<string>>(new Set());
-  const [referenceNodes, setReferenceNodes] = useState<ReferencePropertyNode[]>([]);
   const [savedStates, setSavedStates] = useState<any[]>([]);
-  const searchTimeoutRef = useRef<NodeJS.Timeout>();
-  const dataTableService = GsbDataTableService.getInstance();
   const [newViewTitle, setNewViewTitle] = useState('');
   const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const searchTimeoutRef = useRef<NodeJS.Timeout>();
+  const dataTableService = GsbDataTableService.getInstance();
 
   // Load saved states
   useEffect(() => {
@@ -112,26 +114,49 @@ export function ColumnManagementBar({
     debouncedSearch(value);
   };
 
-  const filteredColumns = columns.filter(col => {
-    return searchQuery === '' || 
-      (col.property.title || col.property.name || '').toLowerCase().includes(searchQuery.toLowerCase());
-  });
-
-  const handleColumnToggle = (propertyName: string) => {
+  const handleColumnToggle = (propertyName: string | undefined) => {
+    if (!propertyName) return;
+    
     onColumnChange(
-      columns.map(col => 
-        col.property.name === propertyName
-          ? { ...col, visible: !col.visible }
-          : col
-      )
+      columns.map(col => {
+        if (col.property.name === propertyName) {
+          return { ...col, visible: !col.visible };
+        }
+        if (col.children) {
+          return {
+            ...col,
+            children: col.children.map(child => 
+              child.property.name === propertyName
+                ? { ...child, visible: !child.visible }
+                : child
+            )
+          };
+        }
+        return col;
+      })
     );
+  };
+
+  const handleExpandReference = (propertyName: string | undefined) => {
+    if (!propertyName) return;
+    
+    setExpandedRefs(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(propertyName)) {
+        newSet.delete(propertyName);
+      } else {
+        newSet.add(propertyName);
+      }
+      return newSet;
+    });
   };
 
   const handleShowAll = () => {
     onColumnChange(
       columns.map(col => ({
         ...col,
-        visible: true
+        visible: true,
+        children: col.children?.map(child => ({ ...child, visible: true }))
       }))
     );
   };
@@ -140,7 +165,8 @@ export function ColumnManagementBar({
     onColumnChange(
       columns.map(col => ({
         ...col,
-        visible: false
+        visible: false,
+        children: col.children?.map(child => ({ ...child, visible: false }))
       }))
     );
   };
@@ -180,6 +206,66 @@ export function ColumnManagementBar({
     const states = await dataTableService.loadGridStates(entityDef.id || '');
     setSavedStates(states);
   };
+
+  const renderColumnItem = (col: ColumnConfig, level: number = 0) => {
+    const isVisible = columns.find(c => c.property.name === col.property.name)?.visible;
+    const isExpanded = expandedRefs.has(col.property.name || '');
+    const hasChildren = col.children && col.children.length > 0;
+    const isReference = col.property.definition?.dataType === DataType.Reference;
+
+    return (
+      <div key={col.property.name}>
+        <div
+          className={cn(
+            "flex items-center gap-4 p-2 rounded-md hover:bg-accent/50 transition-colors",
+            level > 0 && "ml-4"
+          )}
+        >
+          {hasChildren && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-4 w-4 p-0"
+              onClick={() => handleExpandReference(col.property.name)}
+            >
+              {isExpanded ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
+            </Button>
+          )}
+          {!hasChildren && <div className="w-4" />}
+          <GripVertical className="h-4 w-4 text-muted-foreground" />
+          <div className="flex-1 min-w-0">
+            <Label className="text-sm font-medium truncate">
+              {col.property.title || col.property.name}
+            </Label>
+            {col.path && (
+              <div className="text-xs text-muted-foreground truncate">
+                {col.path}
+              </div>
+            )}
+          </div>
+          <Switch
+            checked={isVisible}
+            onCheckedChange={() => handleColumnToggle(col.property.name)}
+          />
+        </div>
+        {hasChildren && isExpanded && (
+          <div className="space-y-1">
+            {col.children?.map(child => renderColumnItem(child, level + 1))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const filteredColumns = columns.filter(col => {
+    const matchesSearch = searchQuery === '' || 
+      (col.property.title || col.property.name || '').toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesSearch;
+  });
 
   return (
     <div className={cn("flex items-center gap-4 p-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60", className)}>
@@ -313,28 +399,7 @@ export function ColumnManagementBar({
 
               <ScrollArea className="flex-1">
                 <div className="space-y-1">
-                  {filteredColumns.map((col) => (
-                    <div
-                      key={col.property.name}
-                      className="flex items-center gap-4 p-2 rounded-md hover:bg-accent/50 transition-colors"
-                    >
-                      <GripVertical className="h-4 w-4 text-muted-foreground" />
-                      <div className="flex-1 min-w-0">
-                        <Label className="text-sm font-medium truncate">
-                          {col.property.title || col.property.name}
-                        </Label>
-                        {col.path && (
-                          <div className="text-xs text-muted-foreground truncate">
-                            {col.path}
-                          </div>
-                        )}
-                      </div>
-                      <Switch
-                        checked={col.visible}
-                        onCheckedChange={() => handleColumnToggle(col.property.name || '')}
-                      />
-                    </div>
-                  ))}
+                  {filteredColumns.map(renderColumnItem)}
                 </div>
               </ScrollArea>
             </div>
