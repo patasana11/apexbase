@@ -34,7 +34,10 @@ import {
   SortChangedEvent,
   FilterChangedEvent,
   NumberEditorModule,
-  Theme
+  Theme,
+  IGetRowsParams,
+  IDatasource,
+  CustomFilterModule,
 } from 'ag-grid-community';
 import { GsbEntityDef, GsbProperty, GsbPropertyDef, DataType } from '@/lib/gsb/models/gsb-entity-def.model';
 import { GsbCacheService } from '@/lib/gsb/services/cache/gsb-cache.service';
@@ -50,6 +53,8 @@ import { SingleQuery, QueryFunction } from '@/lib/gsb/types/query';
 import { GsbDataTableService } from '@/lib/gsb/services/entity/gsb-data-table.service';
 import { GsbEntityService } from '@/lib/gsb/services/entity/gsb-entity.service';
 import { useTheme } from 'next-themes';
+import { EnumFilterComponent } from './filters/EnumFilterComponent';
+import { ReferenceFilterComponent } from './filters/ReferenceFilterComponent';
 // Import AG Grid styles for legacy theme
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
@@ -75,7 +80,8 @@ ModuleRegistry.registerModules([
   CheckboxEditorModule,
   InfiniteRowModelModule,
   CustomEditorModule,
-  NumberEditorModule
+  NumberEditorModule,
+  CustomFilterModule
 ]);
 
 interface GsbDataTableProps {
@@ -178,6 +184,113 @@ export function GsbDataTable({
 
   const gsbDataTableService = GsbDataTableService.getInstance();
 
+  // Handle view changes
+  const handleViewChange = useCallback(async (newQueryParams: QueryParams<any>) => {
+    if (!entityDef) return;
+
+    // Ensure startIndex is non-negative
+    newQueryParams.startIndex = Math.max(0, (page - 1) * pageSize);
+    newQueryParams.count = pageSize;
+
+    const newColumnDefs = await GsbGridUtils.createColumnDefsFromView(newQueryParams, entityDef);
+    const newView = {
+      queryParams: newQueryParams,
+      columnDefs: newColumnDefs
+    };
+    
+    setView(newView);
+    onViewChange?.(newQueryParams);
+  }, [page, pageSize, entityDef, onViewChange]);
+
+  // Define dataSource before using it
+  const dataSource = useMemo<IDatasource>(() => ({
+    getRows: async (params: IGetRowsParams) => {
+      try {
+        const { startRow, endRow } = params;
+        const currentPage = Math.floor(startRow / pageSize) + 1;
+        
+        // Create query options from current view
+        const options = {
+          page: currentPage,
+          pageSize: endRow - startRow,
+          sortField: view?.queryParams?.sortCols?.[0]?.col?.name,
+          sortDirection: view?.queryParams?.sortCols?.[0]?.sortType as 'ASC' | 'DESC',
+          filters: view?.queryParams?.query?.reduce((acc: Record<string, any>, query: SingleQuery) => {
+            if (query.col?.name && query.val?.value !== undefined) {
+              acc[query.col.name] = query.val.value;
+            }
+            return acc;
+          }, {})
+        };
+        
+        // Fetch data
+        const response = await gsbDataTableService.queryEntities(entityDefName, options);
+        
+        // Return data to grid
+        params.successCallback(response.data, response.totalCount);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        params.failCallback();
+      }
+    }
+  }), [entityDefName, pageSize, view, gsbDataTableService]);
+
+  // Handle filter changes
+  const onFilterChanged = useCallback(async (event: FilterChangedEvent) => {
+    if (!view || !entityDef) return;
+    
+    const filterModel = event.api.getFilterModel();
+    const newQueryParams = new QueryParams(entityDefName);
+    Object.assign(newQueryParams, view.queryParams);
+    
+    // Update query params with new filters
+    newQueryParams.query = Object.entries(filterModel).map(([field, filter]: [string, any]) => {
+      const query = new SingleQuery(field);
+      
+      if (filter.type === 'enum') {
+        query.in(filter.values);
+      } else if (filter.type === 'reference') {
+        query.in(filter.refs);
+      } else if (filter.type === 'contains') {
+        query.contains(filter.filter);
+      } else if (filter.type === 'equals') {
+        query.isEqual(filter.filter);
+      } else {
+        query.isEqual(filter.filter);
+      }
+      
+      return query;
+    });
+    
+    // Update view and trigger change
+    await handleViewChange(newQueryParams);
+  }, [entityDefName, view, entityDef, handleViewChange]);
+
+  // Handle grid ready
+  const onGridReady = useCallback((params: GridReadyEvent) => {
+    setGridApi(params.api);
+    
+    // Set datasource immediately when grid is ready
+    if ('setDatasource' in params.api) {
+      (params.api as any).setDatasource(dataSource);
+    }
+    
+    // Apply column state if available
+    if (columnDefs?.length) {
+      const columnState = columnDefs.map(col => ({
+        colId: col.field as string,
+        hide: col.hide,
+        sort: col.sort,
+        width: col.width,
+        pinned: col.pinned
+      }));
+      params.api.applyColumnState({
+        state: columnState,
+        applyOrder: true
+      });
+    }
+  }, [columnDefs, dataSource]);
+
   // Load entity definition and properties
   useEffect(() => {
     const loadEntityDef = async () => {
@@ -271,24 +384,6 @@ export function GsbDataTable({
     } : null);
   }, [view, entityDef]);
 
-  // Handle view changes from ColumnManagementBar
-  const handleViewChange = useCallback(async (newQueryParams: QueryParams<any>) => {
-    if (!entityDef) return;
-
-    // Ensure startIndex is non-negative
-    newQueryParams.startIndex = Math.max(0, (page - 1) * pageSize);
-    newQueryParams.count = pageSize;
-
-    const newColumnDefs = await GsbGridUtils.createColumnDefsFromView(newQueryParams, entityDef);
-    const newView = {
-      queryParams: newQueryParams,
-      columnDefs: newColumnDefs
-    };
-    
-    setView(newView);
-    onViewChange?.(newQueryParams);
-  }, [page, pageSize, entityDef, onViewChange]);
-
   // Handle sort changes
   const onSortChanged = useCallback(async (event: SortChangedEvent) => {
     if (!view || !entityDef) return;
@@ -307,41 +402,6 @@ export function GsbDataTable({
     await handleViewChange(newQueryParams);
   }, [entityDefName, view, entityDef, handleViewChange]);
 
-  // Handle filter changes
-  const onFilterChanged = useCallback(async (event: FilterChangedEvent) => {
-    if (!view || !entityDef) return;
-    
-    const filterModel = event.api.getFilterModel() as FilterModel;
-    const newQueryParams = new QueryParams(entityDefName);
-    Object.assign(newQueryParams, view.queryParams);
-    
-    newQueryParams.query = Object.entries(filterModel).map(([field, filter]) => {
-      const query = new SingleQuery(field);
-      query.isEqual(filter);
-      return query;
-    });
-    
-    await handleViewChange(newQueryParams);
-  }, [entityDefName, view, entityDef, handleViewChange]);
-
-  // Handle grid ready
-  const onGridReady = useCallback((params: GridReadyEvent) => {
-    setGridApi(params.api);
-    if (columnDefs?.length) {
-      const columnState = columnDefs.map(col => ({
-        colId: col.field as string,
-        hide: col.hide,
-        sort: col.sort,
-        width: col.width,
-        pinned: col.pinned
-      }));
-      params.api.applyColumnState({
-        state: columnState,
-        applyOrder: true
-      });
-    }
-  }, [columnDefs]);
-
   const handleStateLoad = (state: any) => {
     try {
       // Try to parse the query as base64 first
@@ -354,13 +414,22 @@ export function GsbDataTable({
   const gridOptions: GridOptions = {
     rowData: rowData,
     columnDefs: columnDefs,
-    pagination: true,
-    paginationPageSize: pageSize,
+    rowModelType: 'infinite',
+    cacheBlockSize: pageSize,
+    maxBlocksInCache: 10,
+    infiniteInitialRowCount: totalCount,
+    maxConcurrentDatasourceRequests: 1,
     defaultColDef: {
       sortable: true,
-      filter: true
+      filter: true,
+      resizable: true,
+      floatingFilter: true
     },
     theme: 'legacy',
+    pagination: true,
+    paginationPageSize: pageSize,
+    paginationPageSizeSelector: [10, 25, 50, 100],
+    suppressPaginationPanel: false,
     onPaginationChanged: (event: any) => {
       const newPage = event.api.paginationGetCurrentPage();
       const newPageSize = event.api.paginationGetPageSize();
@@ -384,9 +453,12 @@ export function GsbDataTable({
     components: {
       bitwiseEnumEditor: BitwiseEnumEditor,
       referenceEditor: ReferenceCellEditor,
-      multiReferenceEditor: MultiReferenceCellEditor
+      multiReferenceEditor: MultiReferenceCellEditor,
+      enumFilter: EnumFilterComponent,
+      referenceFilter: ReferenceFilterComponent
     },
-    onGridReady
+    onGridReady,
+    datasource: dataSource
   };
 
   return (

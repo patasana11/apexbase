@@ -172,19 +172,11 @@ export class GsbGridUtils {
           ...baseConfig,
           cellEditor: 'bitwiseEnumEditor',
           cellEditorPopup: true,
-          filter: 'agMultiColumnFilter',
+          filter: 'enumFilter',
           filterParams: {
-            filterOptions: [
-              'contains',
-              'equals',
-              'notEqual',
-              'greaterThan',
-              'lessThan',
-              'greaterThanOrEqual',
-              'lessThanOrEqual',
-              'inRange'
-            ],
-            defaultOption: 'equals'
+            values: enumValues.map(v => v.value),
+            labels: enumValues.map(v => v.title || v.value),
+            isBitwise: true
           },
           cellEditorParams: {
             values: enumValues.map(v => v.value),
@@ -202,9 +194,11 @@ export class GsbGridUtils {
         return {
           ...baseConfig,
           cellEditor: 'agSelectCellEditor',
-          filter: 'agSetColumnFilter',
+          filter: 'enumFilter',
           filterParams: {
-            values: enumValues.map(v => v.value)
+            values: enumValues.map(v => v.value),
+            labels: enumValues.map(v => v.title || v.value),
+            isBitwise: false
           },
           cellEditorParams: {
             values: enumValues.map(v => v.value),
@@ -228,12 +222,12 @@ export class GsbGridUtils {
           ...baseConfig,
           cellEditor: 'multiReferenceEditor',
           cellEditorPopup: true,
-          filter: 'referenceMultiFilter',
+          filter: 'referenceFilter',
           filterParams: {
-            isMultiple: true,
             property: prop,
             propertyDef: propDef,
-            entityDef: entityDef
+            entityDef: entityDef,
+            isMultiple: true
           },
           context: {
             ...baseConfig.context,
@@ -254,10 +248,10 @@ export class GsbGridUtils {
           cellEditorPopup: true,
           filter: 'referenceFilter',
           filterParams: {
-            isMultiple: false,
             property: prop,
             propertyDef: propDef,
-            entityDef: entityDef
+            entityDef: entityDef,
+            isMultiple: false
           },
           context: {
             ...baseConfig.context,
