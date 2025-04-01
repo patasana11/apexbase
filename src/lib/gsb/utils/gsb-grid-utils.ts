@@ -311,9 +311,17 @@ export class GsbGridUtils {
           cellEditor: 'agCheckboxCellEditor',
           cellEditorPopup: true,
           cellRenderer: 'agCheckboxCellRenderer',
-          filter: 'agSetColumnFilter',
+          filter: 'agTextColumnFilter',
           filterParams: {
-            values: [true, false]
+            filterOptions: [
+              'equals',
+              'notEqual'
+            ],
+            defaultOption: 'equals',
+            textCustomComparator: (filter: string, value: any) => {
+              const boolValue = filter.toLowerCase() === 'true';
+              return value === boolValue;
+            }
           },
           valueFormatter: (params: any) => {
             return params.value ? 'Yes' : 'No';

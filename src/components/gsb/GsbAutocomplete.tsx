@@ -101,7 +101,7 @@ export function GsbAutocomplete({
           value={searchText}
           onChange={(e) => {
             setSearchText(e.target.value);
-            handleSearch(e.target.value);
+            // handleSearch(e.target.value);
           }}
           onFocus={() => setIsOpen(true)}
           placeholder={placeholder}

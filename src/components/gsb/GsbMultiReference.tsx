@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 
 interface GsbMultiReferenceProps {
   entity?: any;
@@ -51,6 +52,7 @@ export function GsbMultiReference({
   const [selectedValues, setSelectedValues] = useState<any[]>([]);
   const [referenceEntityDef, setReferenceEntityDef] = useState<GsbEntityDef | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
 
   // Initial load of reference entity definition
   useEffect(() => {
@@ -324,6 +326,15 @@ export function GsbMultiReference({
           </>
         )}
       </div>
+
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogTitle className="sr-only">Select Reference</DialogTitle>
+          <div className="space-y-4">
+            {/* ... existing code ... */}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 } 
