@@ -3,24 +3,25 @@ import { GsbProperty, GsbPropertyDef, DataType, RefType, GsbEntityDef } from '..
 import { GsbEnum } from '../models/gsb-enum.model';
 import { QueryParams } from '../types/query-params';
 import { GsbCacheService } from '../services/cache/gsb-cache.service';
+import { BASE_PROPERTY_DEFINITIONS } from '../models/gsb-base-definitions';
 
 export interface GridColumnConfigContext {
   property?: GsbProperty;
   propertyDef?: GsbPropertyDef;
   entityDef?: GsbEntityDef;
-  propertyName?: string;    
+  propertyName?: string;
   dataType?: DataType;
   isSystemColumn?: boolean;
   isReference?: boolean;
   isEnum?: boolean;
   isRequired?: boolean;
-  orderNumber?: number; 
+  orderNumber?: number;
   isMultiple?: boolean;
   isSystem?: boolean;
 }
 
 export interface GridColumnConfig extends ColDef {
-    context: GridColumnConfigContext;
+  context: GridColumnConfigContext;
 }
 
 export interface GridViewState {
@@ -44,7 +45,7 @@ export class GsbGridUtils {
     entityDef: GsbEntityDef
   ): Promise<GridViewState> {
     const queryParams = new QueryParams(entityDef.name || '');
-    if(!entityDef.properties) return { queryParams, columnDefs: [] };
+    if (!entityDef.properties) return { queryParams, columnDefs: [] };
     // Create column definitions for all non-system, non-reference properties
     const columnDefs = await Promise.all(entityDef.properties
       .filter(prop => !this.isSystemColumn(prop) && prop.definition?.dataType !== DataType.Reference)
@@ -63,7 +64,7 @@ export class GsbGridUtils {
     entityDef: GsbEntityDef
   ): Promise<GridColumnConfig[]> {
     return await Promise.all(entityDef?.properties?.map(async prop => await this.createColumnDef(prop, entityDef)) || []);
-  } 
+  }
 
   public static async createColumnDefsFromView(
     view: QueryParams<any>,
@@ -77,7 +78,7 @@ export class GsbGridUtils {
       .filter((p): p is GsbProperty => p !== undefined);
 
     // Create column definitions maintaining order from selectCols
-    return await Promise.all(selectedProperties.map(async prop => 
+    return await Promise.all(selectedProperties.map(async prop =>
       await this.createColumnDef(prop, entityDef)
     ));
   }
@@ -145,6 +146,7 @@ export class GsbGridUtils {
       floatingFilter: true,
       minWidth: 100,
       maxWidth: 300,
+
       // Add validation for required fields
       ...(prop.isRequired && {
         cellClass: 'required-field',
@@ -154,7 +156,7 @@ export class GsbGridUtils {
 
     // Handle enum fields
     if (propDef.dataType === DataType.Enum && prop.enum_id) {
-      const enumDef = await GsbCacheService.getInstance().getEnum( prop.enum_id);
+      const enumDef = await GsbCacheService.getInstance().getEnum(prop.enum_id);
       if (!enumDef?.values?.length) return baseConfig;
 
       const enumValues = enumDef.values;
@@ -165,38 +167,45 @@ export class GsbGridUtils {
         enumValues.map(v => [v.value, v.title || v.value])
       );
 
-      // Common formatter for both types
-      const valueFormatter = (params: any) => {
-        if (params.value === undefined || params.value === null) return '';
-        
-        if (isBitwiseEnum) {
-          const selectedValues = enumValues
-            .filter(v => (params.value & (v.value || 0)) === (v.value || 0))
-            .map(v => v.title)
-            .join(', ');
-          return selectedValues || params.value;
-        } else {
-          return valueLabelMap.get(params.value) || params.value;
-        }
-      };
-
       if (isBitwiseEnum) {
-        // Bitwise enum configuration using custom editor component
         return {
           ...baseConfig,
           cellEditor: 'bitwiseEnumEditor',
           cellEditorPopup: true,
+          filter: 'agMultiColumnFilter',
+          filterParams: {
+            filterOptions: [
+              'contains',
+              'equals',
+              'notEqual',
+              'greaterThan',
+              'lessThan',
+              'greaterThanOrEqual',
+              'lessThanOrEqual',
+              'inRange'
+            ],
+            defaultOption: 'equals'
+          },
           cellEditorParams: {
             values: enumValues.map(v => v.value),
             labels: enumValues.map(v => v.title || v.value)
           },
-          valueFormatter
+          valueFormatter: (params: any) => {
+            const selectedValues = enumValues
+              .filter(v => (params.value & (v.value || 0)) === (v.value || 0))
+              .map(v => v.title)
+              .join(', ');
+            return selectedValues || params.value;
+          }
         };
       } else {
-        // Regular enum configuration
         return {
           ...baseConfig,
           cellEditor: 'agSelectCellEditor',
+          filter: 'agSetColumnFilter',
+          filterParams: {
+            values: enumValues.map(v => v.value)
+          },
           cellEditorParams: {
             values: enumValues.map(v => v.value),
             cellRenderer: (params: any) => {
@@ -205,7 +214,9 @@ export class GsbGridUtils {
               return `<span>${label}</span>`;
             }
           },
-          valueFormatter
+          valueFormatter: (params: any) => {
+            return valueLabelMap.get(params.value) || params.value;
+          }
         };
       }
     }
@@ -217,6 +228,13 @@ export class GsbGridUtils {
           ...baseConfig,
           cellEditor: 'multiReferenceEditor',
           cellEditorPopup: true,
+          filter: 'referenceMultiFilter',
+          filterParams: {
+            isMultiple: true,
+            property: prop,
+            propertyDef: propDef,
+            entityDef: entityDef
+          },
           context: {
             ...baseConfig.context,
             isReference: true,
@@ -234,6 +252,13 @@ export class GsbGridUtils {
           ...baseConfig,
           cellEditor: 'referenceEditor',
           cellEditorPopup: true,
+          filter: 'referenceFilter',
+          filterParams: {
+            isMultiple: false,
+            property: prop,
+            propertyDef: propDef,
+            entityDef: entityDef
+          },
           context: {
             ...baseConfig.context,
             isReference: true,
@@ -249,7 +274,341 @@ export class GsbGridUtils {
       }
     }
 
-    return baseConfig;
+    // Check property name for high-level types
+    const propDefName = propDef.name.toLowerCase();
+
+    // Handle different data types with appropriate formatting and editors
+    switch (propDef.dataType) {
+      case DataType.DateTime:
+        return {
+          ...baseConfig,
+          cellEditor: 'dateEditor',
+          cellEditorPopup: true,
+          filter: 'agDateColumnFilter',
+          filterParams: {
+            filterOptions: [
+              'equals',
+              'notEqual',
+              'greaterThan',
+              'lessThan',
+              'greaterThanOrEqual',
+              'lessThanOrEqual',
+              'inRange'
+            ],
+            defaultOption: 'equals'
+          },
+          valueFormatter: (params: any) => {
+            if (!params.value) return '';
+            const date = new Date(params.value);
+            return date.toLocaleString(undefined, {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit'
+            });
+          }
+        };
+
+      case DataType.Bool:
+        return {
+          ...baseConfig,
+          cellEditor: 'agCheckboxCellEditor',
+          cellEditorPopup: true,
+          cellRenderer: 'agCheckboxCellRenderer',
+          filter: 'agSetColumnFilter',
+          filterParams: {
+            values: [true, false]
+          },
+          valueFormatter: (params: any) => {
+            return params.value ? 'Yes' : 'No';
+          }
+        };
+
+      case DataType.Int:
+      case DataType.Long:
+        return {
+          ...baseConfig,
+          cellEditor: 'numberEditor',
+          cellEditorPopup: true,
+          filter: 'agNumberColumnFilter',
+          filterParams: {
+            filterOptions: [
+              'equals',
+              'notEqual',
+              'greaterThan',
+              'lessThan',
+              'greaterThanOrEqual',
+              'lessThanOrEqual',
+              'inRange'
+            ],
+            defaultOption: 'equals'
+          },
+          valueFormatter: (params: any) => {
+            if (params.value === null || params.value === undefined) return '';
+            return new Intl.NumberFormat(undefined, {
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 0
+            }).format(params.value);
+          }
+        };
+
+      case DataType.Decimal:
+        return {
+          ...baseConfig,
+          cellEditor: 'numberEditor',
+          cellEditorPopup: true,
+          filter: 'agNumberColumnFilter',
+          filterParams: {
+            filterOptions: [
+              'equals',
+              'notEqual',
+              'greaterThan',
+              'lessThan',
+              'greaterThanOrEqual',
+              'lessThanOrEqual',
+              'inRange'
+            ],
+            defaultOption: 'equals'
+          },
+          valueFormatter: (params: any) => {
+            if (params.value === null || params.value === undefined) return '';
+            return new Intl.NumberFormat(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 4
+            }).format(params.value);
+          }
+        };
+
+      case DataType.StringUnicode:
+      case DataType.StringASCII:
+        // Check property name for specific text types
+        if (propDefName.includes('email')) {
+          return {
+            ...baseConfig,
+            cellEditor: 'emailEditor',
+            cellEditorPopup: true,
+            filter: 'agTextColumnFilter',
+            filterParams: {
+              filterOptions: [
+                'contains',
+                'notContains',
+                'equals',
+                'notEqual',
+                'startsWith',
+                'endsWith'
+              ],
+              defaultOption: 'contains'
+            },
+            valueFormatter: (params: any) => {
+              return params.value || '';
+            },
+            cellRenderer: (params: any) => {
+              if (!params.value) return '';
+              return `<a href="mailto:${params.value}" class="text-blue-500 hover:underline">${params.value}</a>`;
+            }
+          };
+        }
+
+        if (propDefName.includes('phone') || propDefName.includes('mobile')) {
+          return {
+            ...baseConfig,
+            cellEditor: 'phoneEditor',
+            cellEditorPopup: true,
+            filter: 'agTextColumnFilter',
+            filterParams: {
+              filterOptions: [
+                'contains',
+                'notContains',
+                'equals',
+                'notEqual',
+                'startsWith',
+                'endsWith'
+              ],
+              defaultOption: 'contains'
+            },
+            valueFormatter: (params: any) => {
+              if (!params.value) return '';
+              // Format phone number as (XXX) XXX-XXXX
+              const cleaned = params.value.replace(/\D/g, '');
+              const match = cleaned.match(/^(\d{3})(\d{3})(\d{4})$/);
+              if (match) {
+                return '(' + match[1] + ') ' + match[2] + '-' + match[3];
+              }
+              return params.value;
+            }
+          };
+        }
+
+        if (propDefName.includes('url') || propDefName.includes('link')) {
+          return {
+            ...baseConfig,
+            cellEditor: 'urlEditor',
+            cellEditorPopup: true,
+            filter: 'agTextColumnFilter',
+            filterParams: {
+              filterOptions: [
+                'contains',
+                'notContains',
+                'equals',
+                'notEqual',
+                'startsWith',
+                'endsWith'
+              ],
+              defaultOption: 'contains'
+            },
+            valueFormatter: (params: any) => {
+              return params.value || '';
+            },
+            cellRenderer: (params: any) => {
+              if (!params.value) return '';
+              return `<a href="${params.value}" target="_blank" class="text-blue-500 hover:underline">${params.value}</a>`;
+            }
+          };
+        }
+
+        if (propDefName.includes('password')) {
+          return {
+            ...baseConfig,
+            cellEditor: 'passwordEditor',
+            cellEditorPopup: true,
+            filter: 'agTextColumnFilter',
+            filterParams: {
+              filterOptions: [
+                'contains',
+                'notContains',
+                'equals',
+                'notEqual'
+              ],
+              defaultOption: 'equals'
+            },
+            valueFormatter: (params: any) => {
+              return params.value ? '••••••••' : '';
+            }
+          };
+        }
+
+        if (propDefName.includes('image') || propDefName.includes('photo')) {
+          return {
+            ...baseConfig,
+            cellEditor: 'imageEditor',
+            cellEditorPopup: true,
+            filter: 'agTextColumnFilter',
+            filterParams: {
+              filterOptions: [
+                'contains',
+                'notContains',
+                'equals',
+                'notEqual'
+              ],
+              defaultOption: 'contains'
+            },
+            valueFormatter: (params: any) => {
+              return params.value || '';
+            },
+            cellRenderer: (params: any) => {
+              if (!params.value?.publicUrl) return '';
+              return `<img src="${params.value?.publicUrl}" alt="Image" class="max-w-[100px] max-h-[100px] object-contain" />`;
+            }
+          };
+        }
+
+        if (propDefName.includes('file')) {
+          return {
+            ...baseConfig,
+            cellEditor: 'fileEditor',
+            cellEditorPopup: true,
+            filter: 'agTextColumnFilter',
+            filterParams: {
+              filterOptions: [
+                'contains',
+                'notContains',
+                'equals',
+                'notEqual'
+              ],
+              defaultOption: 'contains'
+            },
+            valueFormatter: (params: any) => {
+              return params.value || '';
+            },
+            cellRenderer: (params: any) => {
+              if (!params.value?.publicUrl) return '';
+              return `<a href="${params.value?.publicUrl}" target="_blank" class="text-blue-500 hover:underline">Download File</a>`;
+            }
+          };
+        }
+
+        // Default text editor
+        return {
+          ...baseConfig,
+          cellEditor: 'textEditor',
+          cellEditorPopup: true,
+          filter: 'agTextColumnFilter',
+          filterParams: {
+            filterOptions: [
+              'contains',
+              'notContains',
+              'equals',
+              'notEqual',
+              'startsWith',
+              'endsWith'
+            ],
+            defaultOption: 'contains'
+          },
+          valueFormatter: (params: any) => {
+            return params.value || '';
+          }
+        };
+
+      case DataType.Binary:
+        return {
+          ...baseConfig,
+          cellEditor: 'binaryEditor',
+          cellEditorPopup: true,
+          filter: 'agTextColumnFilter',
+          filterParams: {
+            filterOptions: [
+              'contains',
+              'notContains',
+              'equals',
+              'notEqual'
+            ],
+            defaultOption: 'equals'
+          },
+          valueFormatter: (params: any) => {
+            return params.value ? 'Binary Data' : '';
+          }
+        };
+
+      case DataType.JSON:
+        return {
+          ...baseConfig,
+          cellEditor: 'jsonEditor',
+          cellEditorPopup: true,
+          filter: 'agTextColumnFilter',
+          filterParams: {
+            filterOptions: [
+              'contains',
+              'notContains',
+              'equals',
+              'notEqual'
+            ],
+            defaultOption: 'contains'
+          },
+          valueFormatter: (params: any) => {
+            if (!params.value) return '';
+            try {
+              return JSON.stringify(params.value, null, 2);
+            } catch {
+              return params.value;
+            }
+          }
+        };
+
+      default:
+        return baseConfig;
+    }
   }
 
   public static filterSystemColumns(columnDefs: GridColumnConfig[]): GridColumnConfig[] {

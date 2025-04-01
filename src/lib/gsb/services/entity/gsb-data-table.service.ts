@@ -5,7 +5,6 @@ import { SingleQuery, QueryFunction, QueryRelation, QueryType } from '../../type
 import { getGsbToken, getGsbTenantCode } from '../../config/gsb-config';
 import { GsbSaveRequest } from '../../types/requests';
 import { GsbCacheService } from '../cache/gsb-cache.service';
-import { GsbUserQuery } from '@/components/gsb/column-management-bar';
 
 export interface DataTableQueryOptions {
   page?: number;

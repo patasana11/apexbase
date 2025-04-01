@@ -35,6 +35,8 @@ interface PropertyNode {
   refEntityDef?: GsbEntityDef;
   children?: PropertyNode[];
   expanded?: boolean;
+  path: string;
+  id: string;
 }
 
 export function ColumnManagementBar({
@@ -74,28 +76,30 @@ export function ColumnManagementBar({
       const nodes: PropertyNode[] = [];
       
       // Add non-reference properties
-      const nonRefProps = entityDef.properties.filter(p => p.definition?.dataType !== DataType.Reference);
+      const nonRefProps = entityDef.properties
+        .filter(p => p.definition?.dataType !== DataType.Reference)
+        .sort((a, b) => (a.title || a.name || '').localeCompare(b.title || b.name || ''));
+      
       nodes.push(...nonRefProps.map(prop => ({
         property: prop,
-        isReference: false
+        isReference: false,
+        path: prop.name ?? '',
+        id: `non-ref-${prop.name}`
       })));
 
       // Add reference properties
-      const refProps = entityDef.properties.filter(p => p.definition?.dataType === DataType.Reference);
+      const refProps = entityDef.properties
+        .filter(p => p.definition?.dataType === DataType.Reference)
+        .sort((a, b) => (a.title || a.name || '').localeCompare(b.title || b.name || ''));
+      
       for (const prop of refProps) {
         if (!prop.refEntDef_id) continue;
         
-        const refDef = await GsbCacheService.getInstance().getEntityDefWithProperties({ id: prop.refEntDef_id });
-        if (!refDef) continue;
-
         nodes.push({
           property: prop,
           isReference: true,
-          refEntityDef: refDef,
-          children: refDef.properties?.map(childProp => ({
-            property: childProp,
-            isReference: false
-          }))
+          path: prop.name ?? '',
+          id: `ref-${prop.name}`
         });
       }
 
@@ -105,15 +109,46 @@ export function ColumnManagementBar({
     loadProperties();
   }, [entityDef]);
 
+  // Load reference properties when expanded
+  const loadReferenceProperties = async (node: PropertyNode) => {
+    if (!node.isReference || !node.property.refEntDef_id) return;
+
+    const refDef = await GsbCacheService.getInstance().getEntityDefWithProperties({ id: node.property.refEntDef_id });
+    if (!refDef) return;
+
+    const children: PropertyNode[] = [];
+
+    // Add non-reference properties
+    const nonRefProps = (refDef.properties?.filter(p => p.definition?.dataType !== DataType.Reference) || [])
+      .sort((a, b) => (a.title || a.name || '').localeCompare(b.title || b.name || ''));
+    
+    children.push(...nonRefProps.map(prop => ({
+      property: prop,
+      isReference: false,
+      path: `${node.path}.${prop.name}`,
+      id: `${node.id}-non-ref-${prop.name}`
+    })));
+
+    // Add reference properties
+    const refProps = (refDef.properties?.filter(p => p.definition?.dataType === DataType.Reference) || [])
+      .sort((a, b) => (a.title || a.name || '').localeCompare(b.title || b.name || ''));
+    
+    children.push(...refProps.map(prop => ({
+      property: prop,
+      isReference: true,
+      path: `${node.path}.${prop.name}`,
+      id: `${node.id}-ref-${prop.name}`
+    })));
+
+    // Update the node with its children
+    setPropertyNodes(prev => prev.map(n => 
+      n.id === node.id ? { ...n, children } : n
+    ));
+  };
+
   // Check if a property is selected in the view
   const isPropertySelected = (node: PropertyNode) => {
-    if (!node.isReference) {
-      return view.queryParams.selectCols?.some(col => col.name === (node.property.name ?? ''));
-    }
-    
-    // For reference properties, check if the path exists in selectCols
-    const path = node.property.name ?? '';
-    return view.queryParams.selectCols?.some(col => col.name === path);
+    return view.queryParams.selectCols?.some(col => col.name === node.path);
   };
 
   // Handle property selection
@@ -122,13 +157,12 @@ export function ColumnManagementBar({
     const newQueryParams = new QueryParams(view.queryParams.entDefName ?? '');
     Object.assign(newQueryParams, view.queryParams);
 
-    const propertyName = node.property.name ?? '';
     if (isSelected) {
-      newQueryParams.selectCols = newQueryParams.selectCols?.filter(col => col.name !== propertyName);
+      newQueryParams.selectCols = newQueryParams.selectCols?.filter(col => col.name !== node.path);
     } else {
       newQueryParams.selectCols = [
         ...(newQueryParams.selectCols || []),
-        { name: propertyName }
+        { name: node.path }
       ];
     }
 
@@ -136,28 +170,48 @@ export function ColumnManagementBar({
   };
 
   // Handle reference property expansion
-  const handleExpandReference = (node: PropertyNode) => {
-    if (!node.isReference || !node.children) return;
+  const handleExpandReference = async (node: PropertyNode) => {
+    if (!node.isReference) return;
 
-    const propertyName = node.property.name ?? '';
     const newExpandedRefs = new Set(expandedRefs);
-    if (newExpandedRefs.has(propertyName)) {
-      newExpandedRefs.delete(propertyName);
+    if (newExpandedRefs.has(node.path)) {
+      newExpandedRefs.delete(node.path);
     } else {
-      newExpandedRefs.add(propertyName);
+      newExpandedRefs.add(node.path);
+      // Load reference properties if not already loaded
+      if (!node.children) {
+        await loadReferenceProperties(node);
+      }
     }
     setExpandedRefs(newExpandedRefs);
   };
 
+  // Filter properties based on search
+  const filterNode = (node: PropertyNode): boolean => {
+    const matchesSearch = searchQuery === '' || 
+      (node.property.title || node.property.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      node.path.toLowerCase().includes(searchQuery.toLowerCase());
+
+    if (!matchesSearch) return false;
+
+    // If node has children and is expanded, check if any children match
+    if (node.children && expandedRefs.has(node.path)) {
+      return node.children.some(child => filterNode(child));
+    }
+
+    return true;
+  };
+
+  const filteredNodes = propertyNodes.filter(filterNode);
+
   // Render property node
   const renderPropertyNode = (node: PropertyNode, level: number = 0) => {
-    const propertyName = node.property.name ?? '';
     const isSelected = isPropertySelected(node);
-    const isExpanded = expandedRefs.has(propertyName);
-    const hasChildren = node.isReference && node.children && node.children.length > 0;
+    const isExpanded = expandedRefs.has(node.path);
+    const hasChildren = node.isReference;
 
     return (
-      <div key={propertyName}>
+      <div key={node.id}>
         <div
           className={cn(
             "flex items-center gap-4 p-2 rounded-md hover:bg-accent/50 transition-colors",
@@ -182,13 +236,11 @@ export function ColumnManagementBar({
           <GripVertical className="h-4 w-4 text-muted-foreground" />
           <div className="flex-1 min-w-0">
             <Label className="text-sm font-medium truncate">
-              {node.property.title || propertyName}
+              {node.property.title || node.property.name}
             </Label>
-            {node.isReference && (
-              <div className="text-xs text-muted-foreground truncate">
-                {propertyName}
-              </div>
-            )}
+            <div className="text-xs text-muted-foreground truncate">
+              {node.path}
+            </div>
           </div>
           <Switch
             checked={isSelected}
@@ -203,13 +255,6 @@ export function ColumnManagementBar({
       </div>
     );
   };
-
-  // Filter properties based on search
-  const filteredNodes = propertyNodes.filter(node => {
-    const matchesSearch = searchQuery === '' || 
-      (node.property.title || node.property.name || '').toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesSearch;
-  });
 
   const handleSaveState = async () => {
     if (!newViewTitle.trim()) return;
