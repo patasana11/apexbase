@@ -7,7 +7,7 @@ import { ClientWrapper } from "@/components/client-wrapper";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Activity, Database, FolderOpenIcon, Home, List, LogOut, Menu, Settings, User, Bot } from "lucide-react";
+import { Activity, Database, FolderOpenIcon, Home, List, LogOut, Menu, Settings, User, Bot, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AuthCheck } from "@/components/auth-check";
 import {
@@ -22,6 +22,7 @@ import {
 import { useAuth } from "@/components/auth-context";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 interface NavItemProps {
   icon: React.ReactNode;
@@ -144,28 +145,15 @@ export default function DashboardLayout({
                 </div>
                 <span className="font-bold">ApexBase</span>
               </Link>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsMobileOpen(false)}
-                className="h-9 w-9"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="h-5 w-5"
+              <div className="flex items-center gap-2">
+                <ThemeToggle />
+                <button
+                  onClick={() => setIsMobileOpen(false)}
+                  className="lg:hidden text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                 >
-                  <path d="M18 6 6 18" />
-                  <path d="m6 6 12 12" />
-                </svg>
-              </Button>
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
             </div>
           </div>
           <ScrollArea className="flex-1 overflow-auto">
@@ -350,6 +338,7 @@ export default function DashboardLayout({
               <span className="sr-only">Toggle menu</span>
             </Button>
             <div className="ml-auto flex items-center gap-2">
+              <ThemeToggle />
               <ClientWrapper>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>

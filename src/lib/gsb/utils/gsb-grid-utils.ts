@@ -2,6 +2,7 @@ import { ColDef } from 'ag-grid-community';
 import { GsbProperty, GsbPropertyDef, DataType, RefType, GsbEntityDef } from '../models/gsb-entity-def.model';
 import { GsbEnum } from '../models/gsb-enum.model';
 import { QueryParams } from '../types/query-params';
+import { GsbCacheService } from '../services/cache/gsb-cache.service';
 
 export interface GridColumnConfigContext {
   property?: GsbProperty;
@@ -39,18 +40,16 @@ export class GsbGridUtils {
     return prop.isSystem || this.SYSTEM_COLUMNS.includes(prop.name || '');
   }
 
-  public static createDefaultView(
-    entityDef: GsbEntityDef,
-    propertyDefs: GsbProperty[],
-    enumCache: Map<string, GsbEnum>
-  ): GridViewState {
+  public static async createDefaultView(
+    entityDef: GsbEntityDef
+  ): Promise<GridViewState> {
     const queryParams = new QueryParams(entityDef.name || '');
-    
+    if(!entityDef.properties) return { queryParams, columnDefs: [] };
     // Create column definitions for all non-system, non-reference properties
-    const columnDefs = propertyDefs
+    const columnDefs = await Promise.all(entityDef.properties
       .filter(prop => !this.isSystemColumn(prop) && prop.definition?.dataType !== DataType.Reference)
       .sort((a, b) => (a.title || a.name || '').localeCompare(b.title || b.name || ''))
-      .map(prop => this.createColumnDef(prop, entityDef, enumCache));
+      .map(async prop => await this.createColumnDef(prop, entityDef)) || []);
 
     // Set initial selectCols
     queryParams.selectCols = columnDefs.map(col => ({
@@ -60,11 +59,16 @@ export class GsbGridUtils {
     return { queryParams, columnDefs };
   }
 
-  public static createColumnDefsFromView(
+  public static async createColumnDefsFromEntityDef(
+    entityDef: GsbEntityDef
+  ): Promise<GridColumnConfig[]> {
+    return await Promise.all(entityDef?.properties?.map(async prop => await this.createColumnDef(prop, entityDef)) || []);
+  } 
+
+  public static async createColumnDefsFromView(
     view: QueryParams<any>,
-    entityDef: GsbEntityDef,
-    enumCache: Map<string, GsbEnum>
-  ): GridColumnConfig[] {
+    entityDef: GsbEntityDef
+  ): Promise<GridColumnConfig[]> {
     if (!view.selectCols || !entityDef?.properties?.length) return [];
 
     // Get all properties that match the selectCols
@@ -73,9 +77,9 @@ export class GsbGridUtils {
       .filter((p): p is GsbProperty => p !== undefined);
 
     // Create column definitions maintaining order from selectCols
-    return selectedProperties.map(prop => 
-      this.createColumnDef(prop, entityDef, enumCache)
-    );
+    return await Promise.all(selectedProperties.map(async prop => 
+      await this.createColumnDef(prop, entityDef)
+    ));
   }
 
   public static updateViewFromColumnChanges(
@@ -107,11 +111,10 @@ export class GsbGridUtils {
     return newView;
   }
 
-  public static createColumnDef(
+  public static async createColumnDef(
     prop: GsbProperty,
-    entityDef: GsbEntityDef,
-    enumCache: Map<string, GsbEnum>
-  ): GridColumnConfig {
+    entityDef: GsbEntityDef
+  ): Promise<GridColumnConfig> {
     // Use the definition if available
     const propDef = prop.definition;
     if (!propDef) {
@@ -151,7 +154,7 @@ export class GsbGridUtils {
 
     // Handle enum fields
     if (propDef.dataType === DataType.Enum && prop.enum_id) {
-      const enumDef = enumCache.get(prop.enum_id);
+      const enumDef = await GsbCacheService.getInstance().getEnum( prop.enum_id);
       if (!enumDef?.values?.length) return baseConfig;
 
       const enumValues = enumDef.values;
