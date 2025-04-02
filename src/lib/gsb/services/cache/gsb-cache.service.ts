@@ -19,7 +19,7 @@ export class GsbCacheService {
     private enumCache: Map<string, CacheEntry<GsbEnum>> = new Map();
     private propertyDefCache: Map<string, CacheEntry<GsbPropertyDef>> = new Map();
     private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-    private enumCacheTimeout = 5 * 60 * 1000; // 5 minutes
+    private enumCacheTimeout = 30 * 60 * 1000; // 30 minutes
     private entityService: GsbEntityService;
 
     private constructor() {

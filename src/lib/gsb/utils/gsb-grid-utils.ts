@@ -178,11 +178,13 @@ export class GsbGridUtils {
           cellEditorPopup: true,
           filter: EnumFilterComponent,
           filterParams: {
+            enumDef: enumDef,
             values: enumValues.map(v => v.value),
             labels: enumValues.map(v => v.title || v.value),
             isBitwise: true
           },
           cellEditorParams: {
+            enumDef: enumDef,
             values: enumValues.map(v => v.value),
             labels: enumValues.map(v => v.title || v.value)
           },
@@ -195,6 +197,7 @@ export class GsbGridUtils {
           },
           floatingFilterComponent: EnumFloatingFilterComponent,
           floatingFilterComponentParams: {
+            enumDef: enumDef,
             values: enumValues.map(v => v.value),
             labels: enumValues.map(v => v.title || v.value),
             isBitwise: true
@@ -206,11 +209,13 @@ export class GsbGridUtils {
           cellEditor: 'agSelectCellEditor',
           filter: EnumFilterComponent,
           filterParams: {
+            enumDef: enumDef,
             values: enumValues.map(v => v.value),
             labels: enumValues.map(v => v.title || v.value),
             isBitwise: false
           },
-          cellEditorParams: {
+          cellEditorParams: { 
+            enumDef: enumDef,
             values: enumValues.map(v => v.value),
             cellRenderer: (params: any) => {
               const value = params.value;
@@ -223,6 +228,7 @@ export class GsbGridUtils {
           },
           floatingFilterComponent: EnumFloatingFilterComponent,
           floatingFilterComponentParams: {
+            enumDef: enumDef,
             values: enumValues.map(v => v.value),
             labels: enumValues.map(v => v.title || v.value),
             isBitwise: false
@@ -649,57 +655,4 @@ export class GsbGridUtils {
     return [...columnDefs].sort((a, b) => (a.context.orderNumber || 0) - (b.context.orderNumber || 0));
   }
 
-  public static getColumnDefs(entityDef: GsbEntityDef): ColDef[] {
-    return entityDef.properties.map(prop => {
-      const colDef: ColDef = {
-        field: prop.name,
-        headerName: prop.title,
-        filter: true,
-        floatingFilter: true,
-        suppressHeaderFilterButton: true,
-        suppressFloatingFilterButton: true,
-        filterParams: {
-          // Add any common filter params here
-        }
-      };
-
-      // Handle different property types
-      switch (prop.type) {
-        case 'enum':
-          colDef.filter = EnumFilterComponent;
-          colDef.floatingFilterComponent = EnumFloatingFilterComponent;
-          colDef.filterParams = {
-            values: prop.enumValues || [],
-            labels: prop.enumLabels || [],
-            isBitwise: prop.isBitwise || false
-          };
-          colDef.floatingFilterComponentParams = {
-            values: prop.enumValues || [],
-            labels: prop.enumLabels || [],
-            isBitwise: prop.isBitwise || false
-          };
-          break;
-
-        case 'reference':
-          colDef.filter = ReferenceFilterComponent;
-          colDef.floatingFilterComponent = ReferenceFloatingFilterComponent;
-          colDef.filterParams = {
-            property: prop,
-            propertyDef: prop,
-            entityDef: prop.referenceEntityDef || entityDef,
-            isMultiple: prop.isMultiple || false
-          };
-          colDef.floatingFilterComponentParams = {
-            property: prop,
-            entityDef: prop.referenceEntityDef || entityDef,
-            isMultiple: prop.isMultiple || false
-          };
-          break;
-
-        // ... rest of the cases ...
-      }
-
-      return colDef;
-    });
-  }
 } 

@@ -49,7 +49,7 @@ import { GsbReference } from './GsbReference';
 import { GsbMultiReference } from './GsbMultiReference';
 import { ColumnManagementBar } from './column-management-bar';
 import { QueryParams } from '@/lib/gsb/types/query-params';
-import { SingleQuery, QueryFunction, QueryRelation } from '@/lib/gsb/types/query';
+import { SingleQuery, QueryFunction, QueryRelation, SelectCol } from '@/lib/gsb/types/query';
 import { GsbDataTableService } from '@/lib/gsb/services/entity/gsb-data-table.service';
 import { GsbEntityService } from '@/lib/gsb/services/entity/gsb-entity.service';
 import { useTheme } from 'next-themes';
@@ -281,7 +281,8 @@ export function GsbDataTable({
               ret.relation = QueryRelation.Or;
               return ret;
             });
-          } else {
+          } else if(colType === DataType.Reference){
+            newQuery.col = new SelectCol(filterName + "_id");
             newQuery.in(value);
           }
         }

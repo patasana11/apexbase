@@ -37,7 +37,7 @@ export class EnumFloatingFilterComponent implements IFloatingFilterComp {
 
   init(params: IFloatingFilterParams) {
     this.params = params;
-    
+
     // Get values and labels from floatingFilterComponentParams
     const componentParams = params.floatingFilterComponentParams as { values: string[]; labels: string[]; isBitwise: boolean };
     if (componentParams) {
@@ -52,17 +52,25 @@ export class EnumFloatingFilterComponent implements IFloatingFilterComp {
     });
   }
 
+  setPlaceholder(placeholder: string) {
+    //this.eFilterInput.value = placeholder;
+    this.eGui.innerHTML = `
+      <input type="text" class="ag-input-field-input" placeholder="${placeholder}" readonly />
+    `;
+  }
+
   onParentModelChanged(parentModel: any) {
     if (!parentModel) {
       this.currentValues = [];
-      this.eFilterInput.value = '';
+      this.setPlaceholder('');
     } else {
-      this.currentValues = parentModel.values || [];
-      // Show selected values in the input
-      this.eFilterInput.value = this.currentValues
-        .map((value: string) => this.labels[this.values.indexOf(value)])
-        .filter(Boolean)
-        .join(', ');
+
+      const placeholder = parentModel.colDef.filterParams.enumDef.values.
+        filter((v: any) => parentModel.filter.includes(v.value)).
+        map((v: any) => v.title).
+        join(', ');
+
+      this.setPlaceholder(placeholder);
     }
   }
 
@@ -89,13 +97,13 @@ export const EnumFilterComponent = forwardRef((props: EnumFilterProps, ref) => {
     const newValues = selectedValues.includes(value)
       ? selectedValues.filter(v => v !== value)
       : [...selectedValues, value];
-    
+
     setSelectedValues(newValues);
-    
+
     // Create filter model
     const filterModel = {
       filter: newValues,
-      colDef : props.colDef
+      colDef: props.colDef
     };
 
     // Call the filter changed callback if it exists
@@ -116,7 +124,7 @@ export const EnumFilterComponent = forwardRef((props: EnumFilterProps, ref) => {
   useImperativeHandle(ref, () => ({
     doesFilterPass(params: IDoesFilterPassParams) {
       if (!selectedValues.length) return true;
-      
+
       const value = params.data[props.colDef.field!];
       if (props.isBitwise) {
         // For bitwise enums, check if any selected value is set

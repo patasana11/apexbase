@@ -103,7 +103,7 @@ export const ReferenceFilterComponent = React.forwardRef((props: ReferenceFilter
     
     // Create filter model
     const filterModel = {
-      filter: newRefs,
+      filter: newRefIds,
       colDef : props.colDef
     };
 
@@ -156,15 +156,6 @@ export const ReferenceFilterComponent = React.forwardRef((props: ReferenceFilter
 
   return (
     <div className="p-4 space-y-4">
-      <div className="space-y-2">
-        <Input
-          type="text"
-          placeholder="Search references..."
-          value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
-          className="w-full"
-        />
-      </div>
 
       <GsbMultiReference
         entity={null}
@@ -176,24 +167,6 @@ export const ReferenceFilterComponent = React.forwardRef((props: ReferenceFilter
         tableOptions={{ pageSize: 10 }}
       />
 
-      {selectedRefs.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {selectedRefs.map(ref => (
-            <div
-              key={ref.id}
-              className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 rounded-md text-sm"
-            >
-              {ref.title}
-              <button
-                onClick={() => handleReferenceChange(selectedRefs.filter(r => r.id !== ref.id).map(r => r.id))}
-                className="ml-1 text-blue-600 hover:text-blue-800"
-              >
-                ×
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }); 
