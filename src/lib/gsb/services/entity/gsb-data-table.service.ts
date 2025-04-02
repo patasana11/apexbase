@@ -23,6 +23,7 @@ export interface DataTableResponse {
 }
 
 export class GsbDataTableService {
+
   private static instance: GsbDataTableService;
   private entityService: GsbEntityService;
   private cacheService: GsbCacheService;
@@ -128,6 +129,15 @@ export class GsbDataTableService {
       console.error('Error querying entities:', error);
       throw error;
     }
+  }
+
+  /**
+   * Get data from the entity service
+   * @param query The query parameters
+   * @returns Promise with query results
+   */
+  getData(query: QueryParams<object>) {
+    return this.entityService.query(query);
   }
 
   /**

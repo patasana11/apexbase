@@ -5,7 +5,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { ChevronDown, ChevronRight, GripVertical, Search, Columns, Eye, EyeOff, X, Save, Upload } from 'lucide-react';
+import { ChevronDown, ChevronRight, GripVertical, Search, Columns, Eye, EyeOff, X, Save, Upload, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { GsbProperty, GsbEntityDef, DataType } from '@/lib/gsb/models/gsb-entity-def.model';
 import { GsbCacheService } from '@/lib/gsb/services/cache/gsb-cache.service';
@@ -18,8 +18,10 @@ import { GsbResourcePackTmpl } from '@/lib/gsb/models/gsb-resource-pack-tmpl.mod
 import { GsbGridUtils, GridViewState, GridColumnConfig } from '@/lib/gsb/utils/gsb-grid-utils';
 import { QueryParams } from '@/lib/gsb/types/query-params';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ColumnManagement } from './column-management';
+import { DataExport } from './data-export';
 
-interface ColumnManagementBarProps {
+interface DataTableToolbarProps {
   view: GridViewState;
   onViewChange: (newQueryParams: QueryParams<any>) => void;
   onColumnVisibilityChange: (changes: { visible?: boolean; propertyName: string }[]) => void;
@@ -27,35 +29,25 @@ interface ColumnManagementBarProps {
   entityDef: GsbEntityDef;
   onStateLoad?: (state: any) => void;
   className?: string;
+  currentPageData: any[];
+  totalCount: number;
 }
 
-interface PropertyNode {
-  property: GsbProperty;
-  isReference: boolean;
-  refEntityDef?: GsbEntityDef;
-  children?: PropertyNode[];
-  expanded?: boolean;
-  path: string;
-  id: string;
-}
-
-export function ColumnManagementBar({
+export function DataTableToolbar({
   view,
   onViewChange,
   onColumnVisibilityChange,
   onColumnOrderChange,
   entityDef,
   onStateLoad,
-  className
-}: ColumnManagementBarProps) {
+  className,
+  currentPageData,
+  totalCount,
+}: DataTableToolbarProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [showColumnSelector, setShowColumnSelector] = useState(false);
-  const [sheetSearchQuery, setSheetSearchQuery] = useState('');
-  const [expandedRefs, setExpandedRefs] = useState<Set<string>>(new Set());
   const [savedStates, setSavedStates] = useState<any[]>([]);
   const [newViewTitle, setNewViewTitle] = useState('');
   const [showSaveDialog, setShowSaveDialog] = useState(false);
-  const [propertyNodes, setPropertyNodes] = useState<PropertyNode[]>([]);
   const searchTimeoutRef = useRef<NodeJS.Timeout>();
   const dataTableService = GsbDataTableService.getInstance();
 
@@ -68,192 +60,28 @@ export function ColumnManagementBar({
     loadStates();
   }, [entityDef]);
 
-  // Load and organize properties
-  useEffect(() => {
-    const loadProperties = async () => {
-      if (!entityDef?.properties) return;
-
-      const nodes: PropertyNode[] = [];
+  // Handle search with debounce
+  const debouncedSearch = useCallback(
+    debounce((query: string) => {
+      const newQueryParams = new QueryParams(view.queryParams.entDefName ?? '');
+      Object.assign(newQueryParams, view.queryParams);
       
-      // Add non-reference properties
-      const nonRefProps = entityDef.properties
-        .filter(p => p.definition?.dataType !== DataType.Reference)
-        .sort((a, b) => (a.title || a.name || '').localeCompare(b.title || b.name || ''));
-      
-      nodes.push(...nonRefProps.map(prop => ({
-        property: prop,
-        isReference: false,
-        path: prop.name ?? '',
-        id: `non-ref-${prop.name}`
-      })));
-
-      // Add reference properties
-      const refProps = entityDef.properties
-        .filter(p => p.definition?.dataType === DataType.Reference)
-        .sort((a, b) => (a.title || a.name || '').localeCompare(b.title || b.name || ''));
-      
-      for (const prop of refProps) {
-        if (!prop.refEntDef_id) continue;
-        
-        nodes.push({
-          property: prop,
-          isReference: true,
-          path: prop.name ?? '',
-          id: `ref-${prop.name}`
-        });
+      if (query.trim()) {
+        newQueryParams.filter = query.trim();
+      } else {
+        delete newQueryParams.filter;
       }
+      
+      onViewChange(newQueryParams);
+    }, 300),
+    [view.queryParams, onViewChange]
+  );
 
-      setPropertyNodes(nodes);
-    };
-
-    loadProperties();
-  }, [entityDef]);
-
-  // Load reference properties when expanded
-  const loadReferenceProperties = async (node: PropertyNode) => {
-    if (!node.isReference || !node.property.refEntDef_id) return;
-
-    const refDef = await GsbCacheService.getInstance().getEntityDefWithProperties({ id: node.property.refEntDef_id });
-    if (!refDef) return;
-
-    const children: PropertyNode[] = [];
-
-    // Add non-reference properties
-    const nonRefProps = (refDef.properties?.filter(p => p.definition?.dataType !== DataType.Reference) || [])
-      .sort((a, b) => (a.title || a.name || '').localeCompare(b.title || b.name || ''));
-    
-    children.push(...nonRefProps.map(prop => ({
-      property: prop,
-      isReference: false,
-      path: `${node.path}.${prop.name}`,
-      id: `${node.id}-non-ref-${prop.name}`
-    })));
-
-    // Add reference properties
-    const refProps = (refDef.properties?.filter(p => p.definition?.dataType === DataType.Reference) || [])
-      .sort((a, b) => (a.title || a.name || '').localeCompare(b.title || b.name || ''));
-    
-    children.push(...refProps.map(prop => ({
-      property: prop,
-      isReference: true,
-      path: `${node.path}.${prop.name}`,
-      id: `${node.id}-ref-${prop.name}`
-    })));
-
-    // Update the node with its children
-    setPropertyNodes(prev => prev.map(n => 
-      n.id === node.id ? { ...n, children } : n
-    ));
-  };
-
-  // Check if a property is selected in the view
-  const isPropertySelected = (node: PropertyNode) => {
-    return view.queryParams.selectCols?.some(col => col.name === node.path);
-  };
-
-  // Handle property selection
-  const handlePropertyToggle = (node: PropertyNode) => {
-    const isSelected = isPropertySelected(node);
-    const newQueryParams = new QueryParams(view.queryParams.entDefName ?? '');
-    Object.assign(newQueryParams, view.queryParams);
-
-    if (isSelected) {
-      newQueryParams.selectCols = newQueryParams.selectCols?.filter(col => col.name !== node.path);
-    } else {
-      newQueryParams.selectCols = [
-        ...(newQueryParams.selectCols || []),
-        { name: node.path }
-      ];
-    }
-
-    onViewChange(newQueryParams);
-  };
-
-  // Handle reference property expansion
-  const handleExpandReference = async (node: PropertyNode) => {
-    if (!node.isReference) return;
-
-    const newExpandedRefs = new Set(expandedRefs);
-    if (newExpandedRefs.has(node.path)) {
-      newExpandedRefs.delete(node.path);
-    } else {
-      newExpandedRefs.add(node.path);
-      // Load reference properties if not already loaded
-      if (!node.children) {
-        await loadReferenceProperties(node);
-      }
-    }
-    setExpandedRefs(newExpandedRefs);
-  };
-
-  // Filter properties based on search
-  const filterNode = (node: PropertyNode): boolean => {
-    const matchesSearch = searchQuery === '' || 
-      (node.property.title || node.property.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      node.path.toLowerCase().includes(searchQuery.toLowerCase());
-
-    if (!matchesSearch) return false;
-
-    // If node has children and is expanded, check if any children match
-    if (node.children && expandedRefs.has(node.path)) {
-      return node.children.some(child => filterNode(child));
-    }
-
-    return true;
-  };
-
-  const filteredNodes = propertyNodes.filter(filterNode);
-
-  // Render property node
-  const renderPropertyNode = (node: PropertyNode, level: number = 0) => {
-    const isSelected = isPropertySelected(node);
-    const isExpanded = expandedRefs.has(node.path);
-    const hasChildren = node.isReference;
-
-    return (
-      <div key={node.id}>
-        <div
-          className={cn(
-            "flex items-center gap-4 p-2 rounded-md hover:bg-accent/50 transition-colors",
-            level > 0 && "ml-4"
-          )}
-        >
-          {hasChildren && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-4 w-4 p-0"
-              onClick={() => handleExpandReference(node)}
-            >
-              {isExpanded ? (
-                <ChevronDown className="h-4 w-4" />
-              ) : (
-                <ChevronRight className="h-4 w-4" />
-              )}
-            </Button>
-          )}
-          {!hasChildren && <div className="w-4" />}
-          <GripVertical className="h-4 w-4 text-muted-foreground" />
-          <div className="flex-1 min-w-0">
-            <Label className="text-sm font-medium truncate">
-              {node.property.title || node.property.name}
-            </Label>
-            <div className="text-xs text-muted-foreground truncate">
-              {node.path}
-            </div>
-          </div>
-          <Switch
-            checked={isSelected}
-            onCheckedChange={() => handlePropertyToggle(node)}
-          />
-        </div>
-        {hasChildren && isExpanded && node.children && (
-          <div className="space-y-1">
-            {node.children.map(child => renderPropertyNode(child, level + 1))}
-          </div>
-        )}
-      </div>
-    );
+  // Handle search input change
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+    debouncedSearch(query);
   };
 
   const handleSaveState = async () => {
@@ -279,7 +107,18 @@ export function ColumnManagementBar({
       // If base64 decode fails, try direct JSON parse
       parsedState = JSON.parse(state.query);
     }
-    onStateLoad?.(parsedState);
+    
+    // Set the userQuery property when loading a saved view
+    const newView = {
+      ...view,
+      userQuery: {
+        id: state.id,
+        title: state.title,
+        query: state.query
+      }
+    };
+    
+    onStateLoad?.(newView);
   };
 
   const handleDeleteState = async (stateId: string) => {
@@ -288,15 +127,30 @@ export function ColumnManagementBar({
     setSavedStates(states);
   };
 
+  const handleResetView = () => {
+    const defaultQueryParams = new QueryParams(view.queryParams.entDefName ?? '');
+    const newView = {
+      ...view,
+      queryParams: defaultQueryParams,
+      userQuery: undefined
+    };
+    onViewChange(newView);
+  };
+
   return (
     <div className={cn("flex items-center gap-4 p-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60", className)}>
+      {/* Entity Title */}
+      <div className="font-semibold text-lg">
+        {entityDef.title || entityDef.name}
+      </div>
+
       {/* Search */}
       <div className="relative flex-1 max-w-sm">
         <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Search columns..."
+          placeholder="Search data..."
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          onChange={handleSearchChange}
           className="pl-8 pr-8"
         />
         {searchQuery && (
@@ -304,12 +158,30 @@ export function ColumnManagementBar({
             variant="ghost"
             size="icon"
             className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 p-0"
-            onClick={() => setSearchQuery('')}
+            onClick={() => {
+              setSearchQuery('');
+              debouncedSearch('');
+            }}
           >
             <X className="h-3 w-3" />
           </Button>
         )}
       </div>
+
+      {/* View Selection */}
+      {view.userQuery && (
+        <div className="flex items-center gap-2 bg-accent px-3 py-1 rounded-md">
+          <span className="text-sm">{view.userQuery.title}</span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-4 w-4 p-0"
+            onClick={handleResetView}
+          >
+            <XCircle className="h-3 w-3" />
+          </Button>
+        </div>
+      )}
 
       {/* Quick Actions */}
       <div className="flex items-center gap-2">
@@ -360,39 +232,21 @@ export function ColumnManagementBar({
           </DialogContent>
         </Dialog>
 
-        {/* Column Selector Sheet */}
-        <Sheet open={showColumnSelector} onOpenChange={setShowColumnSelector}>
-          <SheetTrigger asChild>
-            <Button variant="outline" size="sm">
-              <Columns className="h-4 w-4 mr-2" />
-              Select Columns
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="right" className="w-[400px] sm:w-[540px]">
-            <div className="flex flex-col h-full">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold">Column Settings</h2>
-              </div>
+        {/* Column Management */}
+        <ColumnManagement
+          view={view}
+          onColumnVisibilityChange={onColumnVisibilityChange}
+          onColumnOrderChange={onColumnOrderChange}
+          entityDef={entityDef}
+        />
 
-              {/* Sheet Search */}
-              <div className="relative mb-4">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search columns..."
-                  value={sheetSearchQuery}
-                  onChange={(e) => setSheetSearchQuery(e.target.value)}
-                  className="pl-8"
-                />
-              </div>
-
-              <ScrollArea className="flex-1">
-                <div className="space-y-1">
-                  {filteredNodes.map(node => renderPropertyNode(node))}
-                </div>
-              </ScrollArea>
-            </div>
-          </SheetContent>
-        </Sheet>
+        {/* Data Export */}
+        <DataExport
+          entityDefId={entityDef.id || ''}
+          queryParams={view.queryParams}
+          currentPageData={currentPageData}
+          totalCount={totalCount}
+        />
       </div>
 
       {/* Save Dialog */}

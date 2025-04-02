@@ -30,6 +30,11 @@ export interface GridColumnConfig extends ColDef {
 
 export interface GridViewState {
   queryParams: QueryParams<any>;
+  userQuery?: {
+    id: string;
+    title: string;
+    query: string;
+  };
   columnDefs: GridColumnConfig[];
 }
 
@@ -345,17 +350,11 @@ export class GsbGridUtils {
           cellEditor: 'agCheckboxCellEditor',
           cellEditorPopup: true,
           cellRenderer: 'agCheckboxCellRenderer',
-          filter: 'agTextColumnFilter',
+          filter: 'agSetColumnFilter',
           filterParams: {
-            filterOptions: [
-              'equals',
-              'notEqual'
-            ],
-            defaultOption: 'equals',
-            textCustomComparator: (filter: string, value: any) => {
-              const boolValue = filter.toLowerCase() === 'true';
-              return value === boolValue;
-            }
+            values: [true, false],
+            buttons: ['reset', 'apply'],
+            closeOnApply: true
           },
           valueFormatter: (params: any) => {
             return params.value ? 'Yes' : 'No';
@@ -364,6 +363,26 @@ export class GsbGridUtils {
 
       case DataType.Int:
       case DataType.Long:
+        // Check if this is an ID field
+        if (propDefName.endsWith('id')) {
+          return {
+            ...baseConfig,
+            cellEditor: 'numberEditor',
+            cellEditorPopup: true,
+            filter: 'agNumberColumnFilter',
+            filterParams: {
+              filterOptions: ['equals', 'notEqual'],
+              defaultOption: 'equals'
+            },
+            valueFormatter: (params: any) => {
+              if (params.value === null || params.value === undefined) return '';
+              return new Intl.NumberFormat(undefined, {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+              }).format(params.value);
+            }
+          };
+        }
         return {
           ...baseConfig,
           cellEditor: 'numberEditor',

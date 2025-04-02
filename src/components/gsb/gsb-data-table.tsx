@@ -47,7 +47,7 @@ import { GridColumnConfig, GridColumnConfigContext, GsbGridUtils, GridViewState 
 import BitwiseEnumEditor from './BitwiseEnumEditor';  // Import the custom editor
 import { GsbReference } from './GsbReference';
 import { GsbMultiReference } from './GsbMultiReference';
-import { ColumnManagementBar } from './column-management-bar';
+import { DataTableToolbar } from './column-management-bar';
 import { QueryParams } from '@/lib/gsb/types/query-params';
 import { SingleQuery, QueryFunction, QueryRelation, SelectCol } from '@/lib/gsb/types/query';
 import { GsbDataTableService } from '@/lib/gsb/services/entity/gsb-data-table.service';
@@ -87,13 +87,13 @@ ModuleRegistry.registerModules([
 
 interface GsbDataTableProps {
   entityDefName: string;
-  data: any[];
+  data?: any[];
   onDataChange?: (newData: any[]) => void;
-  totalCount: number;
-  page: number;
-  pageSize: number;
-  onPageChange: (page: number) => void;
-  onPageSizeChange: (pageSize: number) => void;
+  totalCount?: number;
+  page?: number;
+  pageSize?: number;
+  onPageChange?: (page: number) => void;
+  onPageSizeChange?: (pageSize: number) => void;
   onSortChange?: (field: string, direction: 'ASC' | 'DESC') => void;
   onFilterChange?: (filters: Record<string, any>) => void;
   view?: QueryParams<any>;
@@ -556,8 +556,8 @@ export function GsbDataTable({
       const newPageSize = event.api.paginationGetPageSize();
 
       // Update pagination without triggering view changes
-      onPageChange(newPage);
-      onPageSizeChange(newPageSize);
+      onPageChange?.(newPage);
+      onPageSizeChange?.(newPageSize);
     },
     onSortChanged,
     onFilterChanged,
@@ -585,7 +585,7 @@ export function GsbDataTable({
   return (
     <div className="flex flex-col h-full w-full">
       {entityDef && view && (
-        <ColumnManagementBar
+        <DataTableToolbar
           view={view}
           onViewChange={handleViewChange}
           onColumnVisibilityChange={handleColumnVisibilityChanged}
