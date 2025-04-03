@@ -39,7 +39,7 @@ import {
   IDatasource,
   CustomFilterModule,
 } from 'ag-grid-community';
-import { GsbEntityDef, GsbProperty, GsbPropertyDef, DataType } from '@/lib/gsb/models/gsb-entity-def.model';
+import { GsbEntityDef, GsbProperty, GsbPropertyDef, DataType, ViewMode, ScreenType } from '@/lib/gsb/models/gsb-entity-def.model';
 import { GsbCacheService } from '@/lib/gsb/services/cache/gsb-cache.service';
 import { GsbEnum } from '@/lib/gsb/models/gsb-enum.model';
 import { GsbUtils } from '@/lib/gsb/utils/gsb-utils';
@@ -159,6 +159,15 @@ const MultiReferenceCellEditor = forwardRef((props: any, ref) => {
   );
 });
 
+// Add this helper function at the top level
+const formatBitwiseEnumValue = (value: number, enumValues: { value: number; title: string }[]): string => {
+  if (!value) return '';
+  return enumValues
+    .filter(v => (value & v.value) === v.value)
+    .map(v => v.title)
+    .join(', ');
+};
+
 export function GsbDataTable({
   entityDefName,
   view: initialView,
@@ -178,8 +187,8 @@ export function GsbDataTable({
   const [entityDef, setEntityDef] = useState<GsbEntityDef | null>(null);
   const [propertyDefs, setPropertyDefs] = useState<GsbProperty[]>([]);
   const [enumCache, setEnumCache] = useState<Map<string, GsbEnum>>(new Map());
-  const [rowData, setRowData] = useState<any[]>(data);
-  const [totalRows, setTotalRows] = useState<number>(totalCount);
+  const [rowData, setRowData] = useState<any[]>(data || []);
+  const [totalRows, setTotalRows] = useState<number>(totalCount || 0);
   const [view, setView] = useState<GridViewState | null>(null);
   const [columnDefs, setColumnDefs] = useState<ColDef[]>([]);
 
@@ -202,27 +211,27 @@ export function GsbDataTable({
     getRows: async (params: IGetRowsParams) => {
       try {
         const { startRow, endRow } = params;
-        const currentPage = Math.floor(startRow / pageSize) + 1;
+        const currentPage = Math.floor(startRow / (pageSize || 10)) + 1;
 
         const queryParams = new QueryParams(entityDefName);
-        Object.assign(queryParams, view?.queryParams);
+        if (view?.queryParams) {
+          Object.assign(queryParams, view.queryParams);
+        }
         queryParams.startIndex = startRow;
         queryParams.count = endRow - startRow;
         queryParams.calcTotalCount = true;
-        // Create query options from current view
-
 
         // Fetch data
         const response = await GsbEntityService.getInstance().query(queryParams);
 
         // Return data to grid
-        params.successCallback(response.entities || [], response.totalCount);
+        params.successCallback(response.entities || [], response.totalCount || 0);
       } catch (error) {
         console.error('Error fetching data:', error);
         params.failCallback();
       }
     }
-  }), [entityDefName, pageSize, view, gsbDataTableService]);
+  }), [entityDefName, pageSize, view?.queryParams]);
 
   // Handle filter changes
   const onFilterChanged = useCallback(async (event: FilterChangedEvent) => {
@@ -248,7 +257,10 @@ export function GsbDataTable({
         || Array.isArray(value) && !value.length
         || isObject(value) && !Object.keys(value).length
       ) {
-        await handleViewChange(newQueryParams);
+        await handleViewChange({
+          queryParams: newQueryParams,
+          columnDefs: view?.columnDefs || []
+        });
         return;
       }
 
@@ -378,17 +390,15 @@ export function GsbDataTable({
     }
 
     // Update view and trigger change
-    await handleViewChange(newQueryParams);
+    await handleViewChange({
+      queryParams: newQueryParams,
+      columnDefs: view?.columnDefs || []
+    });
   }, [entityDefName, view, entityDef, handleViewChange]);
 
   // Handle grid ready
   const onGridReady = useCallback((params: GridReadyEvent) => {
     setGridApi(params.api);
-
-    // Set datasource immediately when grid is ready
-    if ('setDatasource' in params.api) {
-      (params.api as any).setDatasource(dataSource);
-    }
 
     // Apply column state if available
     if (columnDefs?.length) {
@@ -403,6 +413,11 @@ export function GsbDataTable({
         state: columnState,
         applyOrder: true
       });
+    }
+
+    // Force grid to load data
+    if ('setDatasource' in params.api) {
+      (params.api as any).setDatasource(dataSource);
     }
   }, [columnDefs, dataSource]);
 
@@ -437,7 +452,7 @@ export function GsbDataTable({
     loadEntityDef();
   }, [entityDefName]);
 
-  // Initialize view
+  // Initialize view with screen type
   useEffect(() => {
     const initializeView = async () => {
       if (!entityDef?.properties?.length) return;
@@ -450,6 +465,10 @@ export function GsbDataTable({
         });
         setColumnDefs(columnDefs);
       } else {
+        // Get current screen type (default to PC)
+        const screenType = ScreenType.PC;
+        
+        // Create default view with screen type
         const defaultView = await GsbGridUtils.createDefaultView(entityDef);
         setView(defaultView);
         setColumnDefs(defaultView.columnDefs);
@@ -514,35 +533,81 @@ export function GsbDataTable({
         sortType: col.sort as 'ASC' | 'DESC'
       }));
 
-    await handleViewChange(newQueryParams);
+    await handleViewChange({
+      queryParams: newQueryParams,
+      columnDefs: view?.columnDefs || []
+    });
   }, [entityDefName, view, entityDef, handleViewChange]);
 
   const handleStateLoad = (state: any) => {
     try {
-      // Try to parse the query as base64 first
       handleViewChange(state);
     } catch (error) {
       console.error('Error loading state:', error);
     }
   };
 
+  // Define the grid options before using them
+  const defaultColDef: ColDef = {
+    sortable: true,
+    filter: true,
+    resizable: true,
+    floatingFilter: true,
+    valueFormatter: (params: ValueFormatterParams): string => {
+      const colDef = params.colDef;
+      const context = (colDef as any).context;
+
+      if (context?.property?.name === 'createFormMode' || 
+          context?.property?.name === 'updateFormMode' || 
+          context?.property?.name === 'viewFormMode') {
+        const enumValues = [
+          { value: ViewMode.Editable, title: 'Editable' },
+          { value: ViewMode.ReadOnly, title: 'Read-only' },
+          { value: ViewMode.Hidden, title: 'Hidden' }
+        ];
+        return formatBitwiseEnumValue(params.value as number, enumValues);
+      }
+
+      if (context?.property?.name === 'listScreens') {
+        const enumValues = [
+          { value: ScreenType.PC, title: 'PC' },
+          { value: ScreenType.Tablet, title: 'Tablet' },
+          { value: ScreenType.Mobile, title: 'Mobile' }
+        ];
+        return formatBitwiseEnumValue(params.value as number, enumValues);
+      }
+
+      return String(params.value || '');
+    }
+  };
+
+  // Create a default data source if none is provided
+  const defaultDataSource: IDatasource = {
+    getRows: async (params: IGetRowsParams) => {
+      return {
+        rowData: [],
+        rowCount: 0
+      };
+    }
+  };
+
+  // Create a default grid view state
+  const defaultGridViewState: GridViewState = {
+    queryParams: new QueryParams(entityDefName),
+    columnDefs: []
+  };
+
   const gridOptions: GridOptions = {
-    rowData: rowData,
-    columnDefs: columnDefs,
+    columnDefs: columnDefs || [],
     rowModelType: 'infinite',
-    cacheBlockSize: pageSize,
+    cacheBlockSize: pageSize || 10,
     maxBlocksInCache: 10,
-    infiniteInitialRowCount: totalCount,
+    infiniteInitialRowCount: 1,
     maxConcurrentDatasourceRequests: 1,
-    defaultColDef: {
-      sortable: true,
-      filter: true,
-      resizable: true,
-      floatingFilter: true
-    },
+    defaultColDef,
     theme: 'legacy',
     pagination: true,
-    paginationPageSize: pageSize,
+    paginationPageSize: pageSize || 10,
     paginationPageSizeSelector: [10, 25, 50, 100],
     suppressPaginationPanel: false,
     onPaginationChanged: (event: any) => {
@@ -573,19 +638,47 @@ export function GsbDataTable({
       referenceFilter: ReferenceFilterComponent
     },
     onGridReady,
-    datasource: dataSource
+    datasource: dataSource,
+    // Add these properties to ensure proper data loading
+    suppressRowClickSelection: true,
+    enableCellTextSelection: true,
+    ensureDomOrder: true,
+    // Add these to improve performance
+    suppressColumnVirtualisation: false,
+    suppressRowVirtualisation: false,
+    // Add these to ensure proper infinite scrolling
+    blockLoadDebounceMillis: 100
   };
+
+  // Add debug logging for data source changes
+  useEffect(() => {
+    console.log('Data source dependencies changed:', {
+      entityDefName,
+      pageSize,
+      viewQueryParams: view?.queryParams
+    });
+  }, [entityDefName, pageSize, view?.queryParams]);
+
+  // Add debug logging for grid ready
+  useEffect(() => {
+    if (gridApi && 'setDatasource' in gridApi) {
+      console.log('Grid API is ready, forcing data load');
+      (gridApi as any).setDatasource(dataSource);
+    }
+  }, [gridApi, dataSource]);
 
   return (
     <div className="flex flex-col h-full w-full">
       {entityDef && view && (
         <DataTableToolbar
-          view={view}
+          view={view || defaultGridViewState}
           onViewChange={handleViewChange}
           onColumnVisibilityChange={handleColumnVisibilityChanged}
           onColumnOrderChange={handleColumnOrderChanged}
           entityDef={entityDef}
           onStateLoad={handleStateLoad}
+          currentPageData={rowData || []}
+          totalCount={totalCount || 0}
         />
       )}
       <div

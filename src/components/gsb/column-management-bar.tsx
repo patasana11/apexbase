@@ -1,13 +1,13 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { ChevronDown, ChevronRight, GripVertical, Search, Columns, Eye, EyeOff, X, Save, Upload, XCircle } from 'lucide-react';
+import { ChevronDown, ChevronRight, GripVertical, Search, Columns, Eye, EyeOff, X, Save, Upload, XCircle, Filter } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { GsbProperty, GsbEntityDef, DataType } from '@/lib/gsb/models/gsb-entity-def.model';
+import { GsbProperty, GsbEntityDef, DataType, ScreenType } from '@/lib/gsb/models/gsb-entity-def.model';
 import { GsbCacheService } from '@/lib/gsb/services/cache/gsb-cache.service';
 import { debounce } from 'lodash';
 import { GsbDataTableService } from '@/lib/gsb/services/entity/gsb-data-table.service';
@@ -20,15 +20,25 @@ import { QueryParams } from '@/lib/gsb/types/query-params';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ColumnManagement } from './column-management';
 import { DataExport } from './data-export';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+
+interface PropertyNode {
+  property: GsbProperty;
+  isReference: boolean;
+  refEntityDef?: GsbEntityDef;
+  children?: PropertyNode[];
+  expanded?: boolean;
+  path: string;
+  id: string;
+}
 
 interface DataTableToolbarProps {
   view: GridViewState;
-  onViewChange: (newView: GridViewState) => void;
+  onViewChange: (view: GridViewState) => void;
   onColumnVisibilityChange: (changes: { visible?: boolean; propertyName: string }[]) => void;
   onColumnOrderChange: (changes: { propertyName: string; orderNumber: number }[]) => void;
   entityDef: GsbEntityDef;
-  onStateLoad?: (state: GridViewState) => void;
-  className?: string;
+  onStateLoad: (state: any) => void;
   currentPageData: any[];
   totalCount: number;
 }
@@ -40,9 +50,8 @@ export function DataTableToolbar({
   onColumnOrderChange,
   entityDef,
   onStateLoad,
-  className,
   currentPageData,
-  totalCount,
+  totalCount
 }: DataTableToolbarProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [savedStates, setSavedStates] = useState<any[]>([]);
@@ -50,6 +59,8 @@ export function DataTableToolbar({
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const searchTimeoutRef = useRef<NodeJS.Timeout>();
   const dataTableService = GsbDataTableService.getInstance();
+  const [isOpen, setIsOpen] = useState(false);
+  const [propertyNodes, setPropertyNodes] = useState<PropertyNode[]>([]);
 
   // Load saved states
   useEffect(() => {
@@ -58,6 +69,86 @@ export function DataTableToolbar({
       setSavedStates(states);
     };
     loadStates();
+  }, [entityDef]);
+
+  // Initialize property nodes with tree structure
+  useEffect(() => {
+    const initializePropertyNodes = async () => {
+      if (!entityDef?.properties) return;
+
+      // First create flat nodes
+      const nodes: PropertyNode[] = entityDef.properties.map(prop => ({
+        property: prop,
+        isReference: prop.definition?.dataType === DataType.Reference,
+        refEntityDef: undefined,
+        path: prop.name,
+        id: prop.name,
+        expanded: false,
+        children: []
+      }));
+
+      // Build tree structure
+      const treeNodes: PropertyNode[] = [];
+      const nodeMap = new Map<string, PropertyNode>();
+
+      // First pass: create map of all nodes
+      nodes.forEach(node => {
+        nodeMap.set(node.id, node);
+      });
+
+      // Second pass: build tree structure
+      nodes.forEach(node => {
+        if (node.isReference && node.property.refEntDef_id) {
+          // This is a reference field, it will be a parent node
+          treeNodes.push(node);
+        } else if (!node.property.name.includes('.')) {
+          // This is a top-level field
+          treeNodes.push(node);
+        }
+      });
+
+      setPropertyNodes(treeNodes);
+
+      // Load reference entity definitions
+      const referenceNodes = nodes.filter(node => node.isReference);
+      if (referenceNodes.length > 0) {
+        const cacheService = GsbCacheService.getInstance();
+        const updatedNodes = [...treeNodes];
+        
+        for (const node of referenceNodes) {
+          if (node.property.refEntDef_id) {
+            try {
+              const refEntityDef = await cacheService.getEntityDefWithProperties({id: node.property.refEntDef_id});
+              const nodeIndex = updatedNodes.findIndex(n => n.id === node.id);
+              if (nodeIndex !== -1) {
+                // Create child nodes for reference properties
+                const childNodes = refEntityDef.entityDef.properties?.map(prop => ({
+                  property: prop,
+                  isReference: prop.definition?.dataType === DataType.Reference,
+                  refEntityDef: undefined,
+                  path: `${node.property.name}.${prop.name}`,
+                  id: `${node.property.name}.${prop.name}`,
+                  expanded: false,
+                  children: []
+                })) || [];
+
+                updatedNodes[nodeIndex] = {
+                  ...updatedNodes[nodeIndex],
+                  refEntityDef: refEntityDef.entityDef,
+                  children: childNodes
+                };
+              }
+            } catch (error) {
+              console.error(`Failed to load reference entity for ${node.property.name}:`, error);
+            }
+          }
+        }
+
+        setPropertyNodes(updatedNodes);
+      }
+    };
+
+    initializePropertyNodes();
   }, [entityDef]);
 
   // Handle search with debounce
@@ -145,8 +236,115 @@ export function DataTableToolbar({
     onViewChange(newView);
   };
 
+  // Filter properties based on search query
+  const filteredProperties = useMemo(() => {
+    if (!searchQuery) return propertyNodes;
+
+    const query = searchQuery.toLowerCase();
+    return propertyNodes.filter(node => {
+      const matchesTitle = node.property.title?.toLowerCase().includes(query);
+      const matchesName = node.property.name.toLowerCase().includes(query);
+      const matchesDescription = node.property.description?.toLowerCase().includes(query);
+      return matchesTitle || matchesName || matchesDescription;
+    });
+  }, [propertyNodes, searchQuery]);
+
+  // Handle column selection
+  const handleSelectColumns = (type: 'listed' | 'all' | 'smart') => {
+    if (!entityDef?.properties) return;
+
+    const changes: { visible: boolean; propertyName: string }[] = [];
+    const screenType = ScreenType.PC; // Default to PC
+
+    entityDef.properties.forEach(prop => {
+      let shouldShow = false;
+
+      switch (type) {
+        case 'listed':
+          shouldShow = (prop.listScreens & screenType) === screenType;
+          break;
+        case 'all':
+          shouldShow = true;
+          break;
+        case 'smart':
+          shouldShow = !prop.name.endsWith('_id') && 
+                      !['id', 'createDate', 'lastUpdateDate', 'createdBy_id', 'lastUpdatedBy_id'].includes(prop.name) &&
+                      prop.definition?.dataType !== DataType.Reference;
+          break;
+      }
+
+      if (shouldShow) {
+        changes.push({ visible: true, propertyName: prop.name });
+      }
+    });
+
+    onColumnVisibilityChange(changes);
+  };
+
+  // Render tree node recursively
+  const renderTreeNode = (node: PropertyNode, level: number = 0) => {
+    const isSelected = view.queryParams.selectCols?.some(col => col.name === node.property.name);
+    const hasChildren = node.children && node.children.length > 0;
+
+    return (
+      <div key={node.id}>
+        <div 
+          className={cn(
+            "flex items-center space-x-2 p-2 hover:bg-accent rounded-md",
+            level > 0 && "ml-4"
+          )}
+        >
+          {hasChildren && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-4 w-4 p-0"
+              onClick={() => {
+                setPropertyNodes(prev => 
+                  prev.map(n => 
+                    n.id === node.id 
+                      ? { ...n, expanded: !n.expanded }
+                      : n
+                  )
+                );
+              }}
+            >
+              {node.expanded ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
+            </Button>
+          )}
+          <Switch
+            checked={isSelected}
+            onCheckedChange={(checked) => {
+              onColumnVisibilityChange([{
+                visible: checked,
+                propertyName: node.property.name
+              }]);
+            }}
+          />
+          <div className="flex flex-col">
+            <Label className="font-medium">{node.property.title || node.property.name}</Label>
+            {node.property.description && (
+              <span className="text-sm text-muted-foreground">
+                {node.property.description}
+              </span>
+            )}
+          </div>
+        </div>
+        {hasChildren && node.expanded && (
+          <div className="space-y-2">
+            {node.children?.map(child => renderTreeNode(child, level + 1))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
-    <div className={cn("flex items-center gap-4 p-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60", className)}>
+    <div className={cn("flex items-center gap-4 p-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60")}>
       {/* Entity Title */}
       <div className="font-semibold text-lg">
         {entityDef.title || entityDef.name}
@@ -241,12 +439,51 @@ export function DataTableToolbar({
         </Dialog>
 
         {/* Column Management */}
-        <ColumnManagement
-          view={view}
-          onColumnVisibilityChange={onColumnVisibilityChange}
-          onColumnOrderChange={onColumnOrderChange}
-          entityDef={entityDef}
-        />
+        <Sheet open={isOpen} onOpenChange={setIsOpen}>
+          <SheetTrigger asChild>
+            <Button variant="outline" size="sm">
+              <Filter className="w-4 h-4 mr-2" />
+              Manage Columns
+            </Button>
+          </SheetTrigger>
+          <SheetContent>
+            <div className="flex flex-col h-full">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-2">
+                  <Search className="w-4 h-4" />
+                  <Input
+                    placeholder="Search columns..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      Select Columns
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem onClick={() => handleSelectColumns('listed')}>
+                      Select Listed
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleSelectColumns('all')}>
+                      Select All
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleSelectColumns('smart')}>
+                      Smart Select
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+              <ScrollArea className="flex-1">
+                <div className="space-y-2">
+                  {filteredProperties.map(node => renderTreeNode(node))}
+                </div>
+              </ScrollArea>
+            </div>
+          </SheetContent>
+        </Sheet>
 
         {/* Data Export */}
         <DataExport

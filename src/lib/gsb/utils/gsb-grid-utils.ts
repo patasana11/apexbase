@@ -1,5 +1,5 @@
 import { ColDef } from 'ag-grid-community';
-import { GsbProperty, GsbPropertyDef, DataType, RefType, GsbEntityDef } from '../models/gsb-entity-def.model';
+import { GsbProperty, GsbPropertyDef, DataType, RefType, GsbEntityDef, ScreenType } from '../models/gsb-entity-def.model';
 import { GsbEnum } from '../models/gsb-enum.model';
 import { QueryParams } from '../types/query-params';
 import { GsbCacheService } from '../services/cache/gsb-cache.service';
@@ -47,7 +47,7 @@ export class GsbGridUtils {
   ];
 
   public static isSystemColumn(prop: GsbProperty): boolean {
-    return prop.isSystem || this.SYSTEM_COLUMNS.includes(prop.name || '');
+    return prop.isSystemOnly || this.SYSTEM_COLUMNS.includes(prop.name || '');
   }
 
   public static async createDefaultView(
@@ -55,11 +55,28 @@ export class GsbGridUtils {
   ): Promise<GridViewState> {
     const queryParams = new QueryParams(entityDef.name || '');
     if (!entityDef.properties) return { queryParams, columnDefs: [] };
-    // Create column definitions for all non-system, non-reference properties
-    const columnDefs = await Promise.all(entityDef.properties
-      .filter(prop => !this.isSystemColumn(prop) && prop.definition?.dataType !== DataType.Reference)
-      .sort((a, b) => (a.title || a.name || '').localeCompare(b.title || b.name || ''))
-      .map(async prop => await this.createColumnDef(prop, entityDef)) || []);
+
+    // Get the current screen type (default to PC)
+    const screenType = ScreenType.PC;
+
+    // Filter properties based on screen type and listing status
+    const filteredProperties = entityDef.properties.filter(prop => {
+      // Include system columns
+      
+      // Check if property is listed for the current screen type
+      const isListedForScreen = (prop.listScreens & screenType) === screenType;
+      
+
+      // For reference properties, only include if they are listed and not system columns
+      return isListedForScreen;
+    });
+
+    // Create column definitions for filtered properties
+    const columnDefs = await Promise.all(
+      filteredProperties
+        .sort((a, b) => (a.orderNumber || 0) - (b.orderNumber || 0))
+        .map(async prop => await this.createColumnDef(prop, entityDef))
+    );
 
     // Set initial selectCols
     queryParams.selectCols = columnDefs.map(col => ({

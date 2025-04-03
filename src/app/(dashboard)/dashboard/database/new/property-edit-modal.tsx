@@ -30,7 +30,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label as UILabel } from "@/components/ui/label";
-import { RefType } from "@/lib/gsb/models/gsb-entity-def.model";
+import { RefType, ViewMode, ScreenType } from "@/lib/gsb/models/gsb-entity-def.model";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,6 +39,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 // Define interfaces
 interface Property {
@@ -98,13 +100,34 @@ export function PropertyEditModal({
   isEditing
 }: PropertyEditModalProps) {
   // Initialize state with property data or defaults
-  const [propertyData, setPropertyData] = useState<Property>(
-    property || {
+  const [propertyData, setPropertyData] = useState<Property>(() => {
+    if (property) {
+      return { ...property };
+    }
+    return {
       name: "",
       type: "String",
       required: false,
-    }
-  );
+      description: "",
+      isIndexed: false,
+      isPrimaryKey: false,
+      isPartialPrimaryKey: false,
+      isUnique: false,
+      isEncrypted: false,
+      isSearchable: false,
+      isListed: false,
+      isMultiLingual: false,
+      maxLength: 0,
+      scale: 0,
+      defaultValue: "",
+      cascadeReference: false,
+      formModes: 0,
+      updateFormMode: ViewMode.Editable,
+      viewFormMode: ViewMode.Editable,
+      createFormMode: ViewMode.Editable,
+      listScreens: ScreenType.PC
+    };
+  });
   
   // Track which section is expanded
   const [advancedSectionOpen, setAdvancedSectionOpen] = useState(false);
@@ -118,6 +141,24 @@ export function PropertyEditModal({
         name: "",
         type: "String",
         required: false,
+        description: "",
+        isIndexed: false,
+        isPrimaryKey: false,
+        isPartialPrimaryKey: false,
+        isUnique: false,
+        isEncrypted: false,
+        isSearchable: false,
+        isListed: false,
+        isMultiLingual: false,
+        maxLength: 0,
+        scale: 0,
+        defaultValue: "",
+        cascadeReference: false,
+        formModes: 0,
+        updateFormMode: ViewMode.Editable,
+        viewFormMode: ViewMode.Editable,
+        createFormMode: ViewMode.Editable,
+        listScreens: ScreenType.PC
       });
     }
     // Reset expanded sections
@@ -173,6 +214,15 @@ export function PropertyEditModal({
   const expandAllSections = () => {
     setAdvancedSectionOpen(true);
   };
+
+  // Handle bitwise enum selection
+  const handleBitwiseEnumChange = (value: number, currentValue: number, field: keyof Property) => {
+    const newValue = currentValue & value ? currentValue & ~value : currentValue | value;
+    setPropertyData(prev => ({ ...prev, [field]: newValue }));
+  };
+
+  // Helper to check if a bit is set
+  const isBitSet = (value: number, bit: number) => (value & bit) === bit;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -558,62 +608,98 @@ export function PropertyEditModal({
               
               <div>
                 <UILabel htmlFor="createFormMode">Create Form Mode</UILabel>
-                <Select
-                  value={String(propertyData.createFormMode || "")}
-                  onValueChange={(value) => setPropertyData({ 
-                    ...propertyData, 
-                    createFormMode: value ? parseInt(value) : undefined 
-                  })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select mode" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1">Editable (1)</SelectItem>
-                    <SelectItem value="2">View-only (2)</SelectItem>
-                    <SelectItem value="4">Hidden (4)</SelectItem>
-                  </SelectContent>
-                </Select>
+                <ScrollArea className="h-[100px] border rounded-md p-2">
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="createFormMode-editable"
+                        checked={isBitSet(propertyData.createFormMode || 0, ViewMode.Editable)}
+                        onCheckedChange={() => handleBitwiseEnumChange(ViewMode.Editable, propertyData.createFormMode || 0, 'createFormMode')}
+                      />
+                      <UILabel htmlFor="createFormMode-editable">Editable</UILabel>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="createFormMode-readonly"
+                        checked={isBitSet(propertyData.createFormMode || 0, ViewMode.ReadOnly)}
+                        onCheckedChange={() => handleBitwiseEnumChange(ViewMode.ReadOnly, propertyData.createFormMode || 0, 'createFormMode')}
+                      />
+                      <UILabel htmlFor="createFormMode-readonly">Read-only</UILabel>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="createFormMode-hidden"
+                        checked={isBitSet(propertyData.createFormMode || 0, ViewMode.Hidden)}
+                        onCheckedChange={() => handleBitwiseEnumChange(ViewMode.Hidden, propertyData.createFormMode || 0, 'createFormMode')}
+                      />
+                      <UILabel htmlFor="createFormMode-hidden">Hidden</UILabel>
+                    </div>
+                  </div>
+                </ScrollArea>
               </div>
               
               <div>
                 <UILabel htmlFor="updateFormMode">Update Form Mode</UILabel>
-                <Select
-                  value={String(propertyData.updateFormMode || "")}
-                  onValueChange={(value) => setPropertyData({ 
-                    ...propertyData, 
-                    updateFormMode: value ? parseInt(value) : undefined 
-                  })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select mode" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1">Editable (1)</SelectItem>
-                    <SelectItem value="2">View-only (2)</SelectItem>
-                    <SelectItem value="4">Hidden (4)</SelectItem>
-                  </SelectContent>
-                </Select>
+                <ScrollArea className="h-[100px] border rounded-md p-2">
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="updateFormMode-editable"
+                        checked={isBitSet(propertyData.updateFormMode || 0, ViewMode.Editable)}
+                        onCheckedChange={() => handleBitwiseEnumChange(ViewMode.Editable, propertyData.updateFormMode || 0, 'updateFormMode')}
+                      />
+                      <UILabel htmlFor="updateFormMode-editable">Editable</UILabel>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="updateFormMode-readonly"
+                        checked={isBitSet(propertyData.updateFormMode || 0, ViewMode.ReadOnly)}
+                        onCheckedChange={() => handleBitwiseEnumChange(ViewMode.ReadOnly, propertyData.updateFormMode || 0, 'updateFormMode')}
+                      />
+                      <UILabel htmlFor="updateFormMode-readonly">Read-only</UILabel>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="updateFormMode-hidden"
+                        checked={isBitSet(propertyData.updateFormMode || 0, ViewMode.Hidden)}
+                        onCheckedChange={() => handleBitwiseEnumChange(ViewMode.Hidden, propertyData.updateFormMode || 0, 'updateFormMode')}
+                      />
+                      <UILabel htmlFor="updateFormMode-hidden">Hidden</UILabel>
+                    </div>
+                  </div>
+                </ScrollArea>
               </div>
               
               <div>
                 <UILabel htmlFor="viewFormMode">View Form Mode</UILabel>
-                <Select
-                  value={String(propertyData.viewFormMode || "")}
-                  onValueChange={(value) => setPropertyData({ 
-                    ...propertyData, 
-                    viewFormMode: value ? parseInt(value) : undefined 
-                  })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select mode" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1">Editable (1)</SelectItem>
-                    <SelectItem value="2">View-only (2)</SelectItem>
-                    <SelectItem value="4">Hidden (4)</SelectItem>
-                  </SelectContent>
-                </Select>
+                <ScrollArea className="h-[100px] border rounded-md p-2">
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="viewFormMode-editable"
+                        checked={isBitSet(propertyData.viewFormMode || 0, ViewMode.Editable)}
+                        onCheckedChange={() => handleBitwiseEnumChange(ViewMode.Editable, propertyData.viewFormMode || 0, 'viewFormMode')}
+                      />
+                      <UILabel htmlFor="viewFormMode-editable">Editable</UILabel>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="viewFormMode-readonly"
+                        checked={isBitSet(propertyData.viewFormMode || 0, ViewMode.ReadOnly)}
+                        onCheckedChange={() => handleBitwiseEnumChange(ViewMode.ReadOnly, propertyData.viewFormMode || 0, 'viewFormMode')}
+                      />
+                      <UILabel htmlFor="viewFormMode-readonly">Read-only</UILabel>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="viewFormMode-hidden"
+                        checked={isBitSet(propertyData.viewFormMode || 0, ViewMode.Hidden)}
+                        onCheckedChange={() => handleBitwiseEnumChange(ViewMode.Hidden, propertyData.viewFormMode || 0, 'viewFormMode')}
+                      />
+                      <UILabel htmlFor="viewFormMode-hidden">Hidden</UILabel>
+                    </div>
+                  </div>
+                </ScrollArea>
               </div>
             </div>
           </CollapsibleContent>
