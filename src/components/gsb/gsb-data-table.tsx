@@ -186,18 +186,12 @@ export function GsbDataTable({
   const gsbDataTableService = GsbDataTableService.getInstance();
 
   // Handle view changes
-  const handleViewChange = useCallback(async (newQueryParams: QueryParams<any>) => {
+  const handleViewChange = useCallback(async (newView: GridViewState) => {
     if (!entityDef) return;
-
+    const newQueryParams = new QueryParams(entityDefName);
     // Ensure startIndex is non-negative
-    newQueryParams.startIndex = Math.max(0, (page - 1) * pageSize);
-    newQueryParams.count = pageSize;
-
     const newColumnDefs = await GsbGridUtils.createColumnDefsFromView(newQueryParams, entityDef);
-    const newView = {
-      queryParams: newQueryParams,
-      columnDefs: newColumnDefs
-    };
+    newView.columnDefs = newColumnDefs;
 
     setView(newView);
     onViewChange?.(newQueryParams);

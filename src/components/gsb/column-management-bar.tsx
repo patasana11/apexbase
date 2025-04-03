@@ -23,11 +23,11 @@ import { DataExport } from './data-export';
 
 interface DataTableToolbarProps {
   view: GridViewState;
-  onViewChange: (newQueryParams: QueryParams<any>) => void;
+  onViewChange: (newView: GridViewState) => void;
   onColumnVisibilityChange: (changes: { visible?: boolean; propertyName: string }[]) => void;
   onColumnOrderChange: (changes: { propertyName: string; orderNumber: number }[]) => void;
   entityDef: GsbEntityDef;
-  onStateLoad?: (state: any) => void;
+  onStateLoad?: (state: GridViewState) => void;
   className?: string;
   currentPageData: any[];
   totalCount: number;
@@ -72,9 +72,12 @@ export function DataTableToolbar({
         delete newQueryParams.filter;
       }
       
-      onViewChange(newQueryParams);
+      onViewChange({
+        ...view,
+        queryParams: newQueryParams
+      });
     }, 300),
-    [view.queryParams, onViewChange]
+    [view, onViewChange]
   );
 
   // Handle search input change
@@ -108,9 +111,14 @@ export function DataTableToolbar({
       parsedState = JSON.parse(state.query);
     }
     
+    // Create a new QueryParams instance with the parsed state
+    const newQueryParams = new QueryParams(view.queryParams.entDefName ?? '');
+    Object.assign(newQueryParams, parsedState);
+    
     // Set the userQuery property when loading a saved view
-    const newView = {
+    const newView: GridViewState = {
       ...view,
+      queryParams: newQueryParams,
       userQuery: {
         id: state.id,
         title: state.title,
@@ -129,7 +137,7 @@ export function DataTableToolbar({
 
   const handleResetView = () => {
     const defaultQueryParams = new QueryParams(view.queryParams.entDefName ?? '');
-    const newView = {
+    const newView: GridViewState = {
       ...view,
       queryParams: defaultQueryParams,
       userQuery: undefined

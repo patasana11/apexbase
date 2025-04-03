@@ -83,7 +83,7 @@ export class WorkflowMonitorService {
       }>();
 
       // Process instances
-      instances.forEach(instance => {
+      instances?.forEach(instance => {
         const stats = workflowStats.get(instance.workflow_id) || {
           total: 0,
           errors: 0,

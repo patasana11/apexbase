@@ -99,4 +99,57 @@ export class GsbUtils {
   public static filterEmptyIds(ids: (string | null | undefined)[]): string[] {
     return ids.filter(id => this.isValidId(id)) as string[];
   }
+
+  /**
+   * Gets the view form mode from the given property
+   * @param prop The property to get the view form mode from
+   * @returns The view form mode or undefined if not found
+   */
+  public static getViewFormMode(prop: any): ViewMode | undefined {
+    if (!prop)
+        return undefined;
+    if (prop.viewFormMode) {
+        return prop.viewFormMode;
+    }
+    if (prop.formModes) {
+        return (prop.formModes >> 8) & 0xFF;
+    }
+    return undefined;
+}
+
+  /**
+   * Gets the create form mode from the given property
+   * @param prop The property to get the create form mode from
+   * @returns The create form mode or undefined if not found
+   */
+  public static getCreateFormMode(prop: any): ViewMode | undefined {
+    if (!prop)
+        return undefined;
+
+    if (prop.createFormMode) {
+        return prop.createFormMode;
+    }
+    if (prop.formModes) {
+        return (prop.formModes >> 16) & 0xFF;
+    }
+    return undefined;
+}
+
+  /**
+   * Gets the update form mode from the given property
+   * @param prop The property to get the update form mode from
+   * @returns The update form mode or undefined if not found
+   */ 
+  public static getUpdateFormMode(prop: any): ViewMode | undefined {
+    if (!prop) return undefined;
+
+    if (prop.updateFormMode) {
+        return prop.updateFormMode;
+    }
+    if (prop.formModes) {
+        return prop.formModes & 0xFF;
+    }
+    return undefined;
+}
+
 }

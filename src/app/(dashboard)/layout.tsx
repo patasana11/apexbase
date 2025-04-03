@@ -7,7 +7,7 @@ import { ClientWrapper } from "@/components/client-wrapper";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Activity, Database, FolderOpenIcon, Home, List, LogOut, Menu, Settings, User, Bot, X } from "lucide-react";
+import { Activity, Database, FolderOpenIcon, Home, List, LogOut, Menu, Settings, User, Bot, X, AlertCircle, Clock, Code, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AuthCheck } from "@/components/auth-check";
 import {
@@ -23,6 +23,7 @@ import { useAuth } from "@/components/auth-context";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { FiDatabase, FiUsers, FiSettings, FiCode, FiFileText, FiClock, FiList, FiActivity, FiAlertTriangle } from "react-icons/fi";
 
 interface NavItemProps {
   icon: React.ReactNode;
@@ -32,7 +33,19 @@ interface NavItemProps {
   badge?: string;
   isCollapsed: boolean;
   isSubItem?: boolean;
+  subItems?: NavItemProps[];
 }
+
+type NavItem = {
+  title: string;
+  href: string;
+  icon: React.ComponentType;
+  subItems?: {
+    title: string;
+    href: string;
+    icon: React.ComponentType;
+  }[];
+};
 
 function NavItem({
   icon,
@@ -42,33 +55,167 @@ function NavItem({
   badge,
   isCollapsed,
   isSubItem = false,
+  subItems,
 }: NavItemProps) {
   const pathname = usePathname();
   const isActive = pathname === href || pathname.startsWith(`${href}/`);
+  const [isOpen, setIsOpen] = useState(false);
 
+  // If there are no subItems, render as a regular link
+  if (!subItems?.length) {
+    return (
+      <Link
+        href={href}
+        prefetch={true}
+        className={cn(
+          "flex items-center gap-x-2 rounded-lg px-3 py-2 text-sm transition-all",
+          isActive
+            ? "bg-accent text-accent-foreground"
+            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+          isCollapsed && "justify-center",
+          isSubItem && !isCollapsed && "pl-10"
+        )}
+      >
+        {icon}
+        {!isCollapsed && <span>{title}</span>}
+        {!isCollapsed && badge && (
+          <Badge variant="secondary" className="ml-auto">
+            {badge}
+          </Badge>
+        )}
+      </Link>
+    );
+  }
+
+  // Render as a dropdown for items with subItems
   return (
-    <Link
-      href={href}
-      prefetch={true}
-      className={cn(
-        "flex items-center gap-x-2 rounded-lg px-3 py-2 text-sm transition-all",
-        isActive
-          ? "bg-accent text-accent-foreground"
-          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-        isCollapsed && "justify-center",
-        isSubItem && !isCollapsed && "pl-10"
+    <div>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={cn(
+          "flex w-full items-center gap-x-2 rounded-lg px-3 py-2 text-sm transition-all",
+          isActive
+            ? "bg-accent text-accent-foreground"
+            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+          isCollapsed && "justify-center"
+        )}
+      >
+        {icon}
+        {!isCollapsed && <span>{title}</span>}
+        {!isCollapsed && (
+          <svg
+            className={cn(
+              "ml-auto h-4 w-4 transition-transform",
+              isOpen ? "rotate-180" : ""
+            )}
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        )}
+      </button>
+      {!isCollapsed && isOpen && (
+        <div className="mt-1 space-y-1 pl-4">
+          {subItems.map((subItem) => (
+            <NavItem
+              key={subItem.href}
+              {...subItem}
+              isSubItem={true}
+              isCollapsed={isCollapsed}
+            />
+          ))}
+        </div>
       )}
-    >
-      {icon}
-      {!isCollapsed && <span>{title}</span>}
-      {!isCollapsed && badge && (
-        <Badge variant="secondary" className="ml-auto">
-          {badge}
-        </Badge>
-      )}
-    </Link>
+    </div>
   );
 }
+
+const navItems: NavItem[] = [
+  {
+    title: "Dashboard",
+    href: "/dashboard",
+    icon: Home,
+  },
+  {
+    title: "Database",
+    href: "/dashboard/database",
+    icon: Database,
+  },
+  {
+    title: "Storage",
+    href: "/dashboard/storage",
+    icon: FolderOpenIcon,
+  },
+  {
+    title: "Functions",
+    href: "/dashboard/functions",
+    icon: List,
+  },
+  {
+    title: "Workflow",
+    href: "/dashboard/workflow",
+    icon: Activity,
+  },
+  {
+    title: "AI Agent",
+    href: "/dashboard/ai-agent",
+    icon: Bot,
+    badge: "New",
+  },
+  {
+    title: "Authentication",
+    href: "/dashboard/authentication",
+    icon: User,
+  },
+  {
+    title: "System Management",
+    href: "/dashboard/system",
+    icon: FiSettings,
+    subItems: [
+      {
+        title: "Backups",
+        href: "/dashboard/system/backups",
+        icon: FiDatabase,
+      },
+      {
+        title: "Select Lists",
+        href: "/dashboard/system/selectlists",
+        icon: FiList,
+      },
+      {
+        title: "Audit Logs",
+        href: "/dashboard/system/auditlogs",
+        icon: FiActivity,
+      },
+      {
+        title: "System Logs",
+        href: "/dashboard/system/systemlogs",
+        icon: FiAlertTriangle,
+      },
+      {
+        title: "Recurring Jobs",
+        href: "/dashboard/system/recurringjobs",
+        icon: FiClock,
+      },
+      {
+        title: "Code Generator",
+        href: "/dashboard/system/codegenerator",
+        icon: FiCode,
+      },
+      {
+        title: "Document Templates",
+        href: "/dashboard/system/doctemplates",
+        icon: FiFileText,
+      },
+    ],
+  },
+];
 
 export default function DashboardLayout({
   children,
@@ -159,58 +306,22 @@ export default function DashboardLayout({
           <ScrollArea className="flex-1 overflow-auto">
             <div className="space-y-4 px-3 py-4">
               <div className="space-y-1">
-                <NavItem
-                  icon={<Home className="h-5 w-5" />}
-                  title="Dashboard"
-                  href="/dashboard"
-                  isCollapsed={false}
-                />
-                <NavItem
-                  icon={<Database className="h-5 w-5" />}
-                  title="Database"
-                  href="/dashboard/database"
-                  isCollapsed={false}
-                />
-                <NavItem
-                  icon={<FolderOpenIcon className="h-5 w-5" />}
-                  title="Storage"
-                  href="/dashboard/storage"
-                  isCollapsed={false}
-                />
-                <NavItem
-                  icon={<List className="h-5 w-5" />}
-                  title="Functions"
-                  href="/dashboard/functions"
-                  isCollapsed={false}
-                />
-                <NavItem
-                  icon={<Activity className="h-5 w-5" />}
-                  title="Workflow"
-                  href="/dashboard/workflow"
-                  isCollapsed={false}
-                />
-                <NavItem
-                  icon={<Bot className="h-5 w-5" />}
-                  title="AI Agent"
-                  href="/dashboard/ai-agent"
-                  isCollapsed={false}
-                  badge="New"
-                />
-                <NavItem
-                  icon={<User className="h-5 w-5" />}
-                  title="Authentication"
-                  href="/dashboard/authentication"
-                  isCollapsed={false}
-                />
-              </div>
-              <Separator />
-              <div className="space-y-1">
-                <NavItem
-                  icon={<Settings className="h-5 w-5" />}
-                  title="Settings"
-                  href="/dashboard/settings/general"
-                  isCollapsed={false}
-                />
+                {navItems.map((item) => (
+                  <NavItem
+                    key={item.href}
+                    icon={<item.icon className="h-5 w-5" />}
+                    title={item.title}
+                    href={item.href}
+                    isCollapsed={false}
+                    badge={item.badge}
+                    subItems={item.subItems?.map((subItem) => ({
+                      icon: <subItem.icon className="h-4 w-4" />,
+                      title: subItem.title,
+                      href: subItem.href,
+                      isCollapsed: false,
+                    }))}
+                  />
+                ))}
               </div>
             </div>
           </ScrollArea>
@@ -262,58 +373,22 @@ export default function DashboardLayout({
           <ScrollArea className="flex-1 overflow-auto">
             <div className="space-y-4 p-4">
               <div className="space-y-1">
-                <NavItem
-                  icon={<Home className="h-5 w-5" />}
-                  title="Dashboard"
-                  href="/dashboard"
-                  isCollapsed={isCollapsed}
-                />
-                <NavItem
-                  icon={<Database className="h-5 w-5" />}
-                  title="Database"
-                  href="/dashboard/database"
-                  isCollapsed={isCollapsed}
-                />
-                <NavItem
-                  icon={<FolderOpenIcon className="h-5 w-5" />}
-                  title="Storage"
-                  href="/dashboard/storage"
-                  isCollapsed={isCollapsed}
-                />
-                <NavItem
-                  icon={<List className="h-5 w-5" />}
-                  title="Functions"
-                  href="/dashboard/functions"
-                  isCollapsed={isCollapsed}
-                />
-                <NavItem
-                  icon={<Activity className="h-5 w-5" />}
-                  title="Workflow"
-                  href="/dashboard/workflow"
-                  isCollapsed={isCollapsed}
-                />
-                <NavItem
-                  icon={<Bot className="h-5 w-5" />}
-                  title="AI Agent"
-                  href="/dashboard/ai-agent"
-                  isCollapsed={isCollapsed}
-                  badge="New"
-                />
-                <NavItem
-                  icon={<User className="h-5 w-5" />}
-                  title="Authentication"
-                  href="/dashboard/authentication"
-                  isCollapsed={isCollapsed}
-                />
-              </div>
-              <Separator />
-              <div className="space-y-1">
-                <NavItem
-                  icon={<Settings className="h-5 w-5" />}
-                  title="Settings"
-                  href="/dashboard/settings/general"
-                  isCollapsed={isCollapsed}
-                />
+                {navItems.map((item) => (
+                  <NavItem
+                    key={item.href}
+                    icon={<item.icon className="h-5 w-5" />}
+                    title={item.title}
+                    href={item.href}
+                    isCollapsed={isCollapsed}
+                    badge={item.badge}
+                    subItems={item.subItems?.map((subItem) => ({
+                      icon: <subItem.icon className="h-4 w-4" />,
+                      title: subItem.title,
+                      href: subItem.href,
+                      isCollapsed: isCollapsed,
+                    }))}
+                  />
+                ))}
               </div>
             </div>
           </ScrollArea>
