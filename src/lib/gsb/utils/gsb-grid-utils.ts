@@ -324,7 +324,7 @@ export class GsbGridUtils {
       case DataType.DateTime:
         return {
           ...baseConfig,
-          cellEditor: 'dateEditor',
+          cellEditor: 'datetimeEditor',
           cellEditorPopup: true,
           filter: 'agDateColumnFilter',
           filterParams: {
@@ -357,7 +357,6 @@ export class GsbGridUtils {
         return {
           ...baseConfig,
           cellEditor: 'agCheckboxCellEditor',
-          cellEditorPopup: true,
           cellRenderer: 'agCheckboxCellRenderer',
           filter: 'agSetColumnFilter',
           filterParams: {
@@ -377,7 +376,6 @@ export class GsbGridUtils {
           return {
             ...baseConfig,
             cellEditor: 'numberEditor',
-            cellEditorPopup: true,
             filter: 'agNumberColumnFilter',
             filterParams: {
               filterOptions: ['equals', 'notEqual'],
@@ -395,7 +393,6 @@ export class GsbGridUtils {
         return {
           ...baseConfig,
           cellEditor: 'numberEditor',
-          cellEditorPopup: true,
           filter: 'agNumberColumnFilter',
           filterParams: {
             filterOptions: [
@@ -422,7 +419,6 @@ export class GsbGridUtils {
         return {
           ...baseConfig,
           cellEditor: 'numberEditor',
-          cellEditorPopup: true,
           filter: 'agNumberColumnFilter',
           filterParams: {
             filterOptions: [
@@ -452,7 +448,6 @@ export class GsbGridUtils {
           return {
             ...baseConfig,
             cellEditor: 'emailEditor',
-            cellEditorPopup: true,
             filter: 'agTextColumnFilter',
             filterParams: {
               filterOptions: [
@@ -479,7 +474,6 @@ export class GsbGridUtils {
           return {
             ...baseConfig,
             cellEditor: 'phoneEditor',
-            cellEditorPopup: true,
             filter: 'agTextColumnFilter',
             filterParams: {
               filterOptions: [
@@ -509,7 +503,6 @@ export class GsbGridUtils {
           return {
             ...baseConfig,
             cellEditor: 'urlEditor',
-            cellEditorPopup: true,
             filter: 'agTextColumnFilter',
             filterParams: {
               filterOptions: [
@@ -536,7 +529,6 @@ export class GsbGridUtils {
           return {
             ...baseConfig,
             cellEditor: 'passwordEditor',
-            cellEditorPopup: true,
             filter: 'agTextColumnFilter',
             filterParams: {
               filterOptions: [
@@ -607,7 +599,6 @@ export class GsbGridUtils {
         return {
           ...baseConfig,
           cellEditor: 'textEditor',
-          cellEditorPopup: true,
           filter: 'agTextColumnFilter',
           filterParams: {
             filterOptions: [

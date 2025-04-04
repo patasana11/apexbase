@@ -45,6 +45,7 @@ import { GsbEnum } from '@/lib/gsb/models/gsb-enum.model';
 import { GsbUtils } from '@/lib/gsb/utils/gsb-utils';
 import { GridColumnConfig, GridColumnConfigContext, GsbGridUtils, GridViewState } from '@/lib/gsb/utils/gsb-grid-utils';
 import BitwiseEnumEditor from './BitwiseEnumEditor';  // Import the custom editor
+import DateTimeEditor from './DateTimeEditor';  // Import the datetime editor
 import { GsbReference } from './GsbReference';
 import { GsbMultiReference } from './GsbMultiReference';
 import { DataTableToolbar } from './column-management-bar';
@@ -632,6 +633,7 @@ export function GsbDataTable({
     },
     components: {
       bitwiseEnumEditor: BitwiseEnumEditor,
+      datetimeEditor: DateTimeEditor,  // Add the datetime editor component
       referenceEditor: ReferenceCellEditor,
       multiReferenceEditor: MultiReferenceCellEditor,
       enumFilter: EnumFilterComponent,
