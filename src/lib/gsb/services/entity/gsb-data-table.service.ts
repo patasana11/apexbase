@@ -242,7 +242,7 @@ export class GsbDataTableService {
       
       const deleteRequest: GsbSaveRequest = {
         entDefName: 'GsbUserQuery',
-        entity: { ids: [stateId] }
+        entityId: stateId
       };
 
       return await this.entityService.delete(deleteRequest, token, tenantCode);

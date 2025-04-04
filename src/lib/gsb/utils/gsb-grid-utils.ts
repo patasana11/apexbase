@@ -39,15 +39,9 @@ export interface GridViewState {
 }
 
 export class GsbGridUtils {
-  private static readonly SYSTEM_COLUMNS = [
-    'createDate',
-    'lastUpdateDate',
-    'lastUpdatedBy',
-    'createdBy',
-  ];
 
   public static isSystemColumn(prop: GsbProperty): boolean {
-    return prop.isSystemOnly || this.SYSTEM_COLUMNS.includes(prop.name || '');
+    return prop.isSystemOnly;
   }
 
   public static async createDefaultView(
@@ -163,9 +157,9 @@ export class GsbGridUtils {
         orderNumber: prop.orderNumber,
         propertyDef: propDef,
         isMultiple: prop.isMultiple,
-        isSystem: prop.isSystem
+        isSystem: prop.isSystemOnly
       },
-      editable: !prop.isRequired && !this.isSystemColumn(prop),
+      editable: true,
       sortable: true,
       filter: true,
       resizable: true,
@@ -175,8 +169,6 @@ export class GsbGridUtils {
 
       // Add validation for required fields
       ...(prop.isRequired && {
-        cellClass: 'required-field',
-        cellStyle: { backgroundColor: '#fff3f3' }
       })
     };
 

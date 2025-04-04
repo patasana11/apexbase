@@ -181,11 +181,9 @@ export function DataTableToolbar({
   const handleSaveState = async () => {
     if (!newViewTitle.trim()) return;
     
-    const state = {
-      query: JSON.stringify(view.queryParams)
-    };
 
-    await dataTableService.saveGridState(entityDef.id || '', state, newViewTitle);
+
+    await dataTableService.saveGridState(entityDef.id || '', view.queryParams, newViewTitle);
     const states = await dataTableService.loadGridStates(entityDef.id || '');
     setSavedStates(states);
     setShowSaveDialog(false);
@@ -226,14 +224,10 @@ export function DataTableToolbar({
     setSavedStates(states);
   };
 
-  const handleResetView = () => {
-    const defaultQueryParams = new QueryParams(view.queryParams.entDefName ?? '');
-    const newView: GridViewState = {
-      ...view,
-      queryParams: defaultQueryParams,
-      userQuery: undefined
-    };
-    onViewChange(newView);
+  const handleResetView = async () => {
+    const defaultQueryParams = await GsbGridUtils.createDefaultView(entityDef);
+
+    onViewChange(defaultQueryParams);
   };
 
   // Filter properties based on search query
